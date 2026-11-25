@@ -323,7 +323,7 @@ async fn protocol_service_ipc_client_round_trip_and_error_mapping() {
     #[cfg(windows)]
     let (_dir, endpoint) = (None::<tempfile::TempDir>, format!(r"\\.\pipe\{unique}"));
     #[cfg(not(windows))]
-    let (dir, endpoint) = {
+    let (_dir, endpoint) = {
         let d = tempfile::tempdir().unwrap();
         let ep = d
             .path()
