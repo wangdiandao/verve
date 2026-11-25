@@ -668,7 +668,7 @@ mod linux_ksni {
     const ICON_SIZE: u32 = 32;
 
     enum WorkerCmd {
-        Update(TrayMenuState),
+        Update(Box<TrayMenuState>),
         Shutdown,
     }
 
@@ -856,7 +856,7 @@ mod linux_ksni {
                                 WorkerCmd::Update(next_state) => {
                                     let _ = handle
                                         .update(move |tray: &mut KsniState| {
-                                            tray.state = next_state;
+                                            tray.state = *next_state;
                                         })
                                         .await;
                                 }
@@ -882,7 +882,7 @@ mod linux_ksni {
     impl TrayBackend for LinuxKsniTray {
         fn update_state(&mut self, state: &TrayMenuState) -> Result<(), SysError> {
             self.cmd_tx
-                .send(WorkerCmd::Update(state.clone()))
+                .send(WorkerCmd::Update(Box::new(state.clone())))
                 .map_err(|_| SysError::Tray("ksni tray worker is no longer running".into()))
         }
     }
