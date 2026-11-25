@@ -1,4 +1,4 @@
-//! Backup and synchronization subsystem for Verve (`0.3.0`).
+//! Backup and synchronization subsystem for Verve (`0.0.5`).
 //!
 //! Operates exclusively on the syncable configuration domain managed by
 //! `verve-config` through the [`BackupBackend`] extension trait.

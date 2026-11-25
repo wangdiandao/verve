@@ -46,7 +46,7 @@ pub trait ScriptEngine: Send + Sync + 'static {
     ) -> Result<ScriptOutput, CompileDiagnostic>;
 }
 
-/// Default no-op [`ScriptEngine`] used in `0.0.1` before the `0.2.0` QuickJS sandbox lands.
+/// Default no-op [`ScriptEngine`] used in `0.0.1` before the `0.0.4` QuickJS sandbox lands.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NoopScriptEngine;
 

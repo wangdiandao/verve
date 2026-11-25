@@ -13,9 +13,9 @@ This specification serves two purposes:
 
 Priority tiers:
 
-- **P0 (Core must-have, targeted for `0.1.0`)**: Minimum end-to-end daily proxy client loop.
-- **P1 (Daily high-value, targeted for `0.2.0` – `0.3.0`)**: High-frequency workflows completing the everyday experience.
-- **P2 (Optional power-user, targeted for `0.4.0`)**: Useful advanced capabilities kept out of the primary visual path.
+- **P0 (Core must-have, targeted for `0.0.3`)**: Minimum end-to-end daily proxy client loop.
+- **P1 (Daily high-value, targeted for `0.0.4` – `0.0.5`)**: High-frequency workflows completing the everyday experience.
+- **P2 (Optional power-user, targeted for `0.0.6`)**: Useful advanced capabilities kept out of the primary visual path.
 - **Drop (Legacy baggage)**: Inherited Web-client sprawl, high-maintenance/low-value scrapers, or patterns conflicting with native GPUI architecture—**explicitly excluded**.
 
 ### 1. Global shell and OS integration
@@ -172,28 +172,28 @@ flowchart LR
 
 ### 3. Page specifications
 
-1. **Overview** (`0.1.0`): Fixed 2-column responsive dashboard (collapses to 1 column on narrow windows):
+1. **Overview** (`0.0.3`): Fixed 2-column responsive dashboard (collapses to 1 column on narrow windows):
    - *Network & Mode Control Card*: `Rule` / `Global` / `Direct` segmented control, `System Proxy` & `TUN` switches (with service readiness state), quick actions (`Copy Shell Proxy Env`, `Restart Kernel`).
    - *Active Profile & Quick Switch Card*: Active profile dropdown switcher, one-click refresh, quota bar & expiry, primary proxy group active node & delay.
    - *Live Traffic Card*: Instant throughput, session totals, smooth Canvas chart (`1m` / `5m`).
-   - *Footer Status Strip*: Kernel version, mixed port, uptime, on-demand exit IP button (`0.4.0`).
-2. **Proxies** (`0.1.0`, Providers in `0.2.0`):
+   - *Footer Status Strip*: Kernel version, mixed port, uptime, on-demand exit IP button (`0.0.6`).
+2. **Proxies** (`0.0.3`, Providers in `0.0.4`):
    - Top bar: Mode switch + global filter + test all + Proxy Providers sheet button.
    - Collapsible group sections with strategy badge, current node & delay, inline sort/locate/test actions, and responsive auto-column node card grid (name, protocol + UDP tag, color-coded latency).
-3. **Profiles** (`0.1.0`, native editor & overrides in `0.2.0`):
+3. **Profiles** (`0.0.3`, native editor & overrides in `0.0.4`):
    - Top import bar: URL field + `Import`, `New Local`, `Update All`, `Global Overrides`.
    - Clean profile cards with click-to-activate, quota bar, expiry, relative update time, refresh button, and concise overflow menu.
    - Native `verve-editor` side sheet with embedded collapsible compiler diagnostics & QuickJS console panel.
-4. **Activity** (`0.2.0`):
+4. **Activity** (`0.0.4`):
    - Top `SegmentedButton` switching between `Connections`, `Rules`, and `Logs`—only the active tab holds its RAII `TelemetryLease`.
    - *Connections*: Virtualized table, filter/protocol/sort, pause, close single/all, detail side sheet, right-click one-click Add Rule.
    - *Rules*: Virtualized list, search, copy, Rule Providers drawer.
    - *Logs*: Level filter, search, pause, clear, monospace stream, click-to-copy.
-5. **Settings** (`0.1.0` core, `0.3.0` complete):
+5. **Settings** (`0.0.3` core, `0.0.5` complete):
    - Left category list + right grouped inline forms (`Network`, `Kernel & Overrides`, `General & Appearance`, `Data & Maintenance`). Complex sub-views (DNS raw YAML, WebDAV snapshot history, diagnostic preview) open in a `SideSheet`.
 
 <a id="part-3-versioned-delivery-plan"></a>
 
 ## Part 3: Versioned delivery plan
 
-Verve delivers strictly by semantic version milestones rather than abstract phases—building the headless kernel loop first (`0.0.1` → `0.0.2`), reaching full daily usability at **`0.1.0`**, and expanding incrementally through `0.2.0` → `0.3.0` → `0.4.0` → `1.0.0`. See the full milestone table and exit criteria in [Versioning and releases](release.md#versioned-roadmap).
+Verve delivers strictly by semantic version milestones rather than abstract phases—building the headless kernel loop and UI shell first (`0.0.1` → `0.0.2`), reaching full daily usability at **`0.0.3`**, expanding incrementally through `0.0.4` → `0.0.5` → `0.0.6`, and locking the first public multi-platform release at **`0.1.0`**. See the full milestone table and exit criteria in [Versioning and releases](release.md#versioned-roadmap).
