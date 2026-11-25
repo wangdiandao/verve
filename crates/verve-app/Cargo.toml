@@ -14,6 +14,7 @@ test-support = ["gpui/test-support", "gpui-base/test-support", "verve-ui-kit/tes
 [dependencies]
 arc-swap.workspace = true
 async-channel.workspace = true
+directories.workspace = true
 futures-util.workspace = true
 gpui.workspace = true
 gpui-base.workspace = true

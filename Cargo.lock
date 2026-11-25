@@ -7811,6 +7811,7 @@ version = "0.0.2"
 dependencies = [
  "arc-swap",
  "async-channel",
+ "directories",
  "futures-util",
  "gpui-base",
  "gpui-material",

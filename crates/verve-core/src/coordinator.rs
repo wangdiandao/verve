@@ -1,6 +1,7 @@
 //! Single-writer CQRS [`AppCoordinator`] and [`MihomoCoordinatorBuilder`].
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -12,12 +13,18 @@ use verve_compiler::{
     CommittedConfig, CompileContext, CompilerPipeline, NoopScriptEngine, RuntimeInjectionConfig,
     ScriptEngine,
 };
-use verve_config::{ConfigManager, ProfileEntry, ProfileSource, StateStore, SyncableConfig};
+use verve_config::{
+    ConfigError, ConfigManager, ProfileEntry, ProfileSource, StateStore, SyncableConfig,
+};
 use verve_kernel::{
-    ControlEndpoint, DirectProcessSupervisor, KernelError, KernelSupervisor, LogLevel, ProxyKernel,
-    ProxyMode, ProxyTopology, RuleSnapshot,
+    ControlEndpoint, DaemonIpcSupervisor, DirectProcessSupervisor, KernelError, KernelSupervisor,
+    LogLevel, ProxyKernel, ProxyMode, ProxyTopology, RuleSnapshot, ServiceIpcClient,
 };
 use verve_kernel_mihomo::{MihomoKernel, MihomoKernelConfig, discover_mihomo_binary};
+use verve_sys::{
+    InMemorySystemProxyBackend, OsSystemProxyBackend, SysError, SystemProxyBackend,
+    SystemProxyManager, SystemProxySnapshot,
+};
 
 use crate::commands::{AppCommand, CommandBus};
 use crate::error::CoreError;
@@ -29,7 +36,7 @@ const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_COMMAND_BUFFER_CAPACITY: usize = 64;
 
 /// Configuration parameters for spawning an [`AppCoordinator`].
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct CoordinatorConfig {
     /// Local control-plane IPC endpoint injected into compiled profiles.
     pub control_endpoint: ControlEndpoint,
@@ -43,6 +50,29 @@ pub struct CoordinatorConfig {
     pub traffic_history_capacity: usize,
     /// Maximum number of log entries retained in [`crate::ActivitySlice::logs`].
     pub log_capacity: usize,
+    /// Optional override backend for OS system proxy takeover (defaults to [`OsSystemProxyBackend`]
+    /// or [`InMemorySystemProxyBackend`] when `VERVE_DRY_RUN_SYSPROXY=1`).
+    pub system_proxy_backend: Option<Arc<dyn SystemProxyBackend>>,
+    /// Optional privileged `verve-service` IPC client used when `local.service_mode_enabled` is `true`.
+    pub service_ipc_client: Option<Arc<dyn ServiceIpcClient>>,
+}
+
+impl fmt::Debug for CoordinatorConfig {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CoordinatorConfig")
+            .field("control_endpoint", &self.control_endpoint)
+            .field("kernel_binary_path", &self.kernel_binary_path)
+            .field("startup_timeout", &self.startup_timeout)
+            .field("command_buffer_capacity", &self.command_buffer_capacity)
+            .field("traffic_history_capacity", &self.traffic_history_capacity)
+            .field("log_capacity", &self.log_capacity)
+            .field(
+                "has_custom_system_proxy_backend",
+                &self.system_proxy_backend.is_some(),
+            )
+            .field("has_service_ipc_client", &self.service_ipc_client.is_some())
+            .finish()
+    }
 }
 
 impl Default for CoordinatorConfig {
@@ -54,6 +84,8 @@ impl Default for CoordinatorConfig {
             command_buffer_capacity: DEFAULT_COMMAND_BUFFER_CAPACITY,
             traffic_history_capacity: DEFAULT_TRAFFIC_HISTORY_CAPACITY,
             log_capacity: DEFAULT_LOG_CAPACITY,
+            system_proxy_backend: None,
+            service_ipc_client: None,
         }
     }
 }
@@ -115,6 +147,8 @@ pub struct MihomoCoordinatorBuilder {
     command_buffer_capacity: usize,
     traffic_history_capacity: usize,
     log_capacity: usize,
+    system_proxy_backend: Option<Arc<dyn SystemProxyBackend>>,
+    service_ipc_client: Option<Arc<dyn ServiceIpcClient>>,
 }
 
 impl MihomoCoordinatorBuilder {
@@ -131,6 +165,8 @@ impl MihomoCoordinatorBuilder {
             command_buffer_capacity: DEFAULT_COMMAND_BUFFER_CAPACITY,
             traffic_history_capacity: DEFAULT_TRAFFIC_HISTORY_CAPACITY,
             log_capacity: DEFAULT_LOG_CAPACITY,
+            system_proxy_backend: None,
+            service_ipc_client: None,
         }
     }
 
@@ -188,6 +224,18 @@ impl MihomoCoordinatorBuilder {
         self
     }
 
+    /// Overrides the OS system proxy backend (useful for dry-run / headless verification).
+    pub fn system_proxy_backend(mut self, backend: Arc<dyn SystemProxyBackend>) -> Self {
+        self.system_proxy_backend = Some(backend);
+        self
+    }
+
+    /// Supplies a [`ServiceIpcClient`] used when `local.service_mode_enabled` is enabled.
+    pub fn service_ipc_client(mut self, client: Arc<dyn ServiceIpcClient>) -> Self {
+        self.service_ipc_client = Some(client);
+        self
+    }
+
     /// Opens configuration storage, resolves the Mihomo binary, and spawns [`AppCoordinator`].
     pub fn spawn(self) -> Result<CoordinatorHandle<MihomoKernel>, CoreError> {
         let config_manager = ConfigManager::open(&self.root_dir)?;
@@ -211,7 +259,17 @@ impl MihomoCoordinatorBuilder {
         }));
 
         let compiler = CompilerPipeline::new(self.script_engine);
-        let supervisor = KernelSupervisor::Direct(DirectProcessSupervisor::new());
+        let supervisor = if local.service_mode_enabled
+            && let Some(ref client) = self.service_ipc_client
+        {
+            KernelSupervisor::Service(DaemonIpcSupervisor::new(
+                Arc::clone(client),
+                "mihomo",
+                control_endpoint.as_str_lossy().into_owned(),
+            ))
+        } else {
+            KernelSupervisor::Direct(DirectProcessSupervisor::new())
+        };
         let coord_config = CoordinatorConfig {
             control_endpoint,
             kernel_binary_path: Some(binary_path),
@@ -219,9 +277,34 @@ impl MihomoCoordinatorBuilder {
             command_buffer_capacity: self.command_buffer_capacity,
             traffic_history_capacity: self.traffic_history_capacity,
             log_capacity: self.log_capacity,
+            system_proxy_backend: self.system_proxy_backend,
+            service_ipc_client: self.service_ipc_client,
         };
 
         AppCoordinator::spawn(config_manager, compiler, supervisor, kernel, coord_config)
+    }
+}
+
+#[derive(Clone)]
+struct SharedSystemProxyBackend(Arc<dyn SystemProxyBackend>);
+
+impl SystemProxyBackend for SharedSystemProxyBackend {
+    fn get_current(&self) -> Result<SystemProxySnapshot, SysError> {
+        self.0.get_current()
+    }
+
+    fn apply(&self, snapshot: &SystemProxySnapshot) -> Result<(), SysError> {
+        self.0.apply(snapshot)
+    }
+}
+
+fn default_system_proxy_backend() -> Arc<dyn SystemProxyBackend> {
+    let dry_run = std::env::var_os("VERVE_DRY_RUN_SYSPROXY")
+        .is_some_and(|val| val == "1" || val.eq_ignore_ascii_case("true"));
+    if dry_run {
+        Arc::new(InMemorySystemProxyBackend::default())
+    } else {
+        Arc::new(OsSystemProxyBackend)
     }
 }
 
@@ -235,6 +318,7 @@ pub struct AppCoordinator<K: ProxyKernel> {
     kernel: Arc<K>,
     snapshots: Arc<SnapshotStore>,
     telemetry: TelemetryHub<K>,
+    sysproxy_manager: SystemProxyManager<SharedSystemProxyBackend>,
     config: CoordinatorConfig,
 }
 
@@ -247,9 +331,33 @@ impl<K: ProxyKernel> AppCoordinator<K> {
         kernel: Arc<K>,
         config: CoordinatorConfig,
     ) -> Result<CoordinatorHandle<K>, CoreError> {
-        let syncable = config_manager.load_syncable()?;
+        let mut syncable = config_manager.load_syncable()?;
         let local = config_manager.load_local()?;
         let state_store = config_manager.open_state_store()?;
+        let sysproxy_backend = config
+            .system_proxy_backend
+            .clone()
+            .unwrap_or_else(default_system_proxy_backend);
+        let sysproxy_manager = SystemProxyManager::with_backend(
+            config_manager.runtime_dir(),
+            SharedSystemProxyBackend(sysproxy_backend),
+        );
+
+        match sysproxy_manager.heal_if_crashed() {
+            Ok(true) => {
+                tracing::warn!(
+                    "healed stale system proxy takeover marker from previous unclean exit"
+                );
+                if syncable.system_proxy_enabled {
+                    syncable.system_proxy_enabled = false;
+                    config_manager.save_syncable(&syncable)?;
+                }
+            }
+            Ok(false) => {}
+            Err(err) => {
+                tracing::warn!(error = %err, "failed to heal stale system proxy marker on startup");
+            }
+        }
         let usages_vec = state_store.list_profile_usages()?;
         let usages: BTreeMap<String, _> = usages_vec
             .into_iter()
@@ -315,6 +423,7 @@ impl<K: ProxyKernel> AppCoordinator<K> {
             kernel: Arc::clone(&kernel),
             snapshots: Arc::clone(&snapshots),
             telemetry: telemetry.clone(),
+            sysproxy_manager,
             config,
         };
 
@@ -378,6 +487,26 @@ impl<K: ProxyKernel> AppCoordinator<K> {
                 AppCommand::SetProxyMode { mode, reply } => {
                     let res = self.handle_set_proxy_mode(mode).await;
                     send_reply("set_proxy_mode", reply, res);
+                }
+                AppCommand::SetSystemProxy { enabled, reply } => {
+                    let res = self.handle_set_system_proxy(enabled);
+                    if let Err(ref err) = res {
+                        let msg = err.to_string();
+                        self.snapshots.publish_runtime(|r| r.last_error = Some(msg));
+                    }
+                    send_reply("set_system_proxy", reply, res);
+                }
+                AppCommand::SetTunEnabled { enabled, reply } => {
+                    let res = self.handle_set_tun_enabled(enabled).await;
+                    if let Err(ref err) = res {
+                        let msg = err.to_string();
+                        self.snapshots.publish_runtime(|r| r.last_error = Some(msg));
+                    }
+                    send_reply("set_tun_enabled", reply, res);
+                }
+                AppCommand::SetThemeMode { mode, reply } => {
+                    let res = self.handle_set_theme_mode(mode);
+                    send_reply("set_theme_mode", reply, res);
                 }
                 AppCommand::RefreshRules { reply } => {
                     let res = self.handle_refresh_rules().await;
@@ -559,6 +688,9 @@ impl<K: ProxyKernel> AppCoordinator<K> {
             return Err(CoreError::Kernel(KernelError::AlreadyRunning { pid }));
         }
 
+        let local = self.config_manager.load_local()?;
+        self.sync_supervisor_kind(local.service_mode_enabled);
+
         let active_path = self.config_manager.runtime_dir().join("active.yaml");
         if !active_path.exists() {
             let active_id = self
@@ -688,6 +820,115 @@ impl<K: ProxyKernel> AppCoordinator<K> {
         Ok(())
     }
 
+    fn handle_set_system_proxy(&mut self, enabled: bool) -> Result<(), CoreError> {
+        if enabled {
+            self.sysproxy_manager.enable(
+                "127.0.0.1",
+                self.syncable.mixed_port,
+                &self.syncable.system_proxy_bypass,
+            )?;
+        } else {
+            self.sysproxy_manager.disable()?;
+        }
+
+        self.syncable.system_proxy_enabled = enabled;
+        self.config_manager.save_syncable(&self.syncable)?;
+
+        self.snapshots.publish_runtime(|runtime| {
+            runtime.system_proxy_enabled = enabled;
+            runtime.last_error = None;
+        });
+        self.snapshots.publish_settings(|settings| {
+            settings.syncable = self.syncable.clone();
+        });
+
+        Ok(())
+    }
+
+    async fn handle_set_tun_enabled(&mut self, enabled: bool) -> Result<(), CoreError> {
+        self.syncable.tun_enabled = enabled;
+        self.config_manager.save_syncable(&self.syncable)?;
+
+        self.snapshots.publish_runtime(|runtime| {
+            runtime.tun_enabled = enabled;
+            runtime.last_error = None;
+        });
+        self.snapshots.publish_settings(|settings| {
+            settings.syncable = self.syncable.clone();
+        });
+
+        if let Some(active_id) = self.syncable.active_profile_id.clone() {
+            let (_profile, committed) = self.compile_and_commit_profile(&active_id).await?;
+            let local = self.config_manager.load_local()?;
+            let want_service =
+                local.service_mode_enabled && self.config.service_ipc_client.is_some();
+            let is_service = matches!(self.supervisor, KernelSupervisor::Service(_));
+
+            if self.supervisor.is_running() {
+                if want_service != is_service {
+                    self.stop_supervisor_best_effort().await?;
+                    self.remove_stale_unix_socket();
+                    self.snapshots.publish_runtime(|runtime| {
+                        runtime.kernel_running = false;
+                        runtime.kernel_pid = None;
+                    });
+                    self.sync_supervisor_kind(local.service_mode_enabled);
+                    self.handle_start_kernel().await?;
+                } else {
+                    self.kernel.reload_config(&committed.active_path).await?;
+                    self.apply_saved_selections(&active_id).await;
+                    self.refresh_proxies_internal().await?;
+                }
+            } else {
+                self.sync_supervisor_kind(local.service_mode_enabled);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn handle_set_theme_mode(&mut self, mode: String) -> Result<(), CoreError> {
+        let normalized = mode.trim().to_ascii_lowercase();
+        match normalized.as_str() {
+            "light" | "dark" | "system" => {}
+            _ => {
+                return Err(CoreError::Config(ConfigError::InvalidField {
+                    field: "theme_mode",
+                    value: mode,
+                    reason: "expected one of \"light\", \"dark\", or \"system\"".into(),
+                }));
+            }
+        }
+
+        self.syncable.theme_mode = normalized;
+        self.config_manager.save_syncable(&self.syncable)?;
+        self.snapshots.publish_settings(|settings| {
+            settings.syncable = self.syncable.clone();
+        });
+        Ok(())
+    }
+
+    fn sync_supervisor_kind(&mut self, service_mode_enabled: bool) {
+        if self.supervisor.is_running() {
+            return;
+        }
+        let want_service = service_mode_enabled && self.config.service_ipc_client.is_some();
+        let is_service = matches!(self.supervisor, KernelSupervisor::Service(_));
+        if want_service == is_service {
+            return;
+        }
+
+        self.supervisor = if want_service && let Some(ref client) = self.config.service_ipc_client {
+            KernelSupervisor::Service(DaemonIpcSupervisor::new(
+                Arc::clone(client),
+                "mihomo",
+                self.config.control_endpoint.as_str_lossy().into_owned(),
+            ))
+        } else {
+            KernelSupervisor::Direct(DirectProcessSupervisor::new())
+        };
+    }
+
     async fn handle_refresh_rules(&mut self) -> Result<RuleSnapshot, CoreError> {
         let snapshot = self.kernel.fetch_rules().await?;
         self.snapshots.publish_activity(|activity| {
@@ -699,11 +940,23 @@ impl<K: ProxyKernel> AppCoordinator<K> {
 
     async fn handle_shutdown(&mut self) -> Result<(), CoreError> {
         self.telemetry.shutdown().await;
+        if self.syncable.system_proxy_enabled || self.sysproxy_manager.marker_path().exists() {
+            if let Err(err) = self.sysproxy_manager.disable() {
+                tracing::warn!(error = %err, "failed to disable system proxy during shutdown");
+            }
+            if self.syncable.system_proxy_enabled {
+                self.syncable.system_proxy_enabled = false;
+                if let Err(err) = self.config_manager.save_syncable(&self.syncable) {
+                    tracing::warn!(error = %err, "failed to persist system proxy reset during shutdown");
+                }
+            }
+        }
         let stop_res = self.stop_supervisor_best_effort().await;
         self.remove_stale_unix_socket();
         self.snapshots.publish_runtime(|runtime| {
             runtime.kernel_running = false;
             runtime.kernel_pid = None;
+            runtime.system_proxy_enabled = false;
         });
         stop_res
     }
