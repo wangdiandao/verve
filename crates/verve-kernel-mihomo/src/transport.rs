@@ -233,8 +233,6 @@ pub(crate) async fn open_websocket(
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use super::*;
 
     #[test]
@@ -269,7 +267,7 @@ mod tests {
     #[tokio::test]
     async fn unix_socket_endpoint_rejected_gracefully_on_windows() {
         let err = connect_ipc(
-            &ControlEndpoint::UnixSocket(PathBuf::from("/tmp/mihomo.sock")),
+            &ControlEndpoint::UnixSocket(std::path::PathBuf::from("/tmp/mihomo.sock")),
             Duration::from_millis(50),
         )
         .await
