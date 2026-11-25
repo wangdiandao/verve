@@ -13,7 +13,10 @@ pub use model::{
     ProxyProviderInfo, ProxyTopology, RuleEntry, RuleProviderInfo, RuleSnapshot, TelemetryEvent,
     TelemetryKind, TelemetryStream, TrafficSample,
 };
-pub use supervisor::{DaemonIpcSupervisor, DirectProcessSupervisor, KernelSupervisor};
+pub use supervisor::{
+    DaemonIpcSupervisor, DirectProcessSupervisor, KernelSupervisor, RemoteKernelStatus,
+    ServiceIpcClient,
+};
 
 /// Abstract control-plane contract implemented by concrete proxy kernel adapters.
 pub trait ProxyKernel: Send + Sync + 'static {
