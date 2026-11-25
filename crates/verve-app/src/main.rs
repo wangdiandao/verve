@@ -1,5 +1,5 @@
-//! Desktop application composition root for Verve (`0.0.2`).
+//! Desktop application binary entrypoint for Verve (`0.0.2`).
 
 fn main() {
-    // Desktop shell and GPUI composition root are implemented in 0.0.2.
+    verve_app::bootstrap::run_desktop_app();
 }

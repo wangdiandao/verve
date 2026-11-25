@@ -74,6 +74,27 @@ pub enum AppCommand {
         /// Optional reply channel receiving completion status.
         reply: Option<oneshot::Sender<Result<(), CoreError>>>,
     },
+    /// Enables or disables OS system proxy takeover and persists `settings.toml`.
+    SetSystemProxy {
+        /// Target system proxy state.
+        enabled: bool,
+        /// Optional reply channel receiving completion status.
+        reply: Option<oneshot::Sender<Result<(), CoreError>>>,
+    },
+    /// Enables or disables TUN mode, recompiles `active.yaml`, and reloads/restarts kernel supervision.
+    SetTunEnabled {
+        /// Target TUN mode state.
+        enabled: bool,
+        /// Optional reply channel receiving completion status.
+        reply: Option<oneshot::Sender<Result<(), CoreError>>>,
+    },
+    /// Validates and persists UI `theme_mode` (`"light"`, `"dark"`, or `"system"`) in `settings.toml`.
+    SetThemeMode {
+        /// Target theme mode string.
+        mode: String,
+        /// Optional reply channel receiving completion status.
+        reply: Option<oneshot::Sender<Result<(), CoreError>>>,
+    },
     /// Fetches active routing rules and external rule providers into `ActivitySlice`.
     RefreshRules {
         /// Optional reply channel receiving [`RuleSnapshot`].
@@ -194,6 +215,33 @@ impl CommandBus {
     pub async fn set_proxy_mode(&self, mode: ProxyMode) -> Result<(), CoreError> {
         self.call(|reply| AppCommand::SetProxyMode {
             mode,
+            reply: Some(reply),
+        })
+        .await
+    }
+
+    /// Enables or disables OS system proxy takeover and persists `settings.toml`.
+    pub async fn set_system_proxy(&self, enabled: bool) -> Result<(), CoreError> {
+        self.call(|reply| AppCommand::SetSystemProxy {
+            enabled,
+            reply: Some(reply),
+        })
+        .await
+    }
+
+    /// Enables or disables TUN mode, recompiles `active.yaml`, and reloads/restarts supervision.
+    pub async fn set_tun_enabled(&self, enabled: bool) -> Result<(), CoreError> {
+        self.call(|reply| AppCommand::SetTunEnabled {
+            enabled,
+            reply: Some(reply),
+        })
+        .await
+    }
+
+    /// Validates and persists `syncable.theme_mode` (`"light"`, `"dark"`, or `"system"`).
+    pub async fn set_theme_mode(&self, mode: impl Into<String>) -> Result<(), CoreError> {
+        self.call(|reply| AppCommand::SetThemeMode {
+            mode: mode.into(),
             reply: Some(reply),
         })
         .await

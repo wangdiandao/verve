@@ -4,6 +4,7 @@ use thiserror::Error;
 use verve_compiler::CompileDiagnostic;
 use verve_config::ConfigError;
 use verve_kernel::KernelError;
+use verve_sys::SysError;
 
 /// Errors produced by core orchestration, configuration compilation, and kernel control.
 #[derive(Debug, Error)]
@@ -19,6 +20,10 @@ pub enum CoreError {
     /// Proxy kernel process supervision or IPC control-plane error.
     #[error("kernel error: {0}")]
     Kernel(#[from] KernelError),
+
+    /// OS integration error (system proxy takeover, tray, single-instance, or auto-launch).
+    #[error("system integration error: {0}")]
+    Sys(#[from] SysError),
 
     /// Requested profile identifier does not exist in `SyncableConfig`.
     #[error("profile `{0}` not found")]

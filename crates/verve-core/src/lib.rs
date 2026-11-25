@@ -3,6 +3,7 @@
 mod commands;
 mod coordinator;
 mod error;
+mod service_ipc;
 mod snapshot;
 mod telemetry;
 
@@ -11,6 +12,7 @@ pub use coordinator::{
     AppCoordinator, CoordinatorConfig, CoordinatorHandle, MihomoCoordinatorBuilder,
 };
 pub use error::CoreError;
+pub use service_ipc::ProtocolServiceIpcClient;
 pub use snapshot::{
     ActivitySlice, AppSnapshot, DomainDirtyEvent, DomainKind, ProfilesSlice, ProxiesSlice,
     Revision, RuntimeSlice, SettingsSlice, SnapshotStore, TelemetrySlice,

@@ -4,6 +4,18 @@ See [versioning and releases](docs/release.md) for the version progression polic
 
 ## Unreleased
 
+## 0.0.2 - 2026-11-25
+
+### UI & UX
+
+- Implemented the `verve-ui-kit` Material 3 Expressive design system wrapper with light/dark/system theme tokens, `SectionCard`, `HealthIndicator`, `LatencyBadge`, `MetricTile`, `EmptyState`, and GPU Canvas `TrafficChart` / `MiniSparkline` components.
+- Built the `verve-app` desktop composition root featuring `AppShell` (40px client-drawn `TitleBar`, adaptive `NavigationDrawer`/`NavigationRail`, sidebar telemetry pod, and error `Snackbar`), `UiStore` selective domain projections, `CommandDispatcher`, scoped `SideSheetHost` / `ConfirmDialogHost`, and RAII `UiTelemetryLease` streaming across the 5 vertical feature slices (`Overview`, `Proxies`, `Profiles`, `Activity`, `Settings`).
+
+### System & Service
+
+- Implemented `verve-sys` platform adapters for OS system proxy takeover with atomic crash-recovery markers, cross-platform system tray residency (`NativeTray` / `LinuxKsniTray`), single-instance locking with primary-window activation IPC, login auto-launch, and host power/network `OsEventBus` listeners.
+- Implemented the minimal privileged `verve-service` IPC daemon (`verve-protocol` v1) with peer-credential checks, trusted binary path/SHA-256 allowlist validation, and anti-orphan kernel supervision, wired to `AppCoordinator` via `ProtocolServiceIpcClient`, `set_system_proxy`, `set_tun_enabled`, and `set_theme_mode`.
+
 ## 0.0.1 - 2026-11-25
 
 ### Core & Kernel
