@@ -1,0 +1,67 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/verve-app",
+    "crates/verve-compiler",
+    "crates/verve-config",
+    "crates/verve-core",
+    "crates/verve-editor",
+    "crates/verve-kernel",
+    "crates/verve-kernel-mihomo",
+    "crates/verve-protocol",
+    "crates/verve-service",
+    "crates/verve-sync",
+    "crates/verve-sys",
+    "crates/verve-ui-kit",
+]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.95.0"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/wangdiandao/verve"
+readme = "README.md"
+publish = false
+
+[workspace.dependencies]
+# Internal workspace crates
+verve-app = { version = "=0.0.1", path = "crates/verve-app" }
+verve-compiler = { version = "=0.0.1", path = "crates/verve-compiler" }
+verve-config = { version = "=0.0.1", path = "crates/verve-config" }
+verve-core = { version = "=0.0.1", path = "crates/verve-core" }
+verve-editor = { version = "=0.0.1", path = "crates/verve-editor" }
+verve-kernel = { version = "=0.0.1", path = "crates/verve-kernel" }
+verve-kernel-mihomo = { version = "=0.0.1", path = "crates/verve-kernel-mihomo" }
+verve-protocol = { version = "=0.0.1", path = "crates/verve-protocol" }
+verve-service = { version = "=0.0.1", path = "crates/verve-service" }
+verve-sync = { version = "=0.0.1", path = "crates/verve-sync" }
+verve-sys = { version = "=0.0.1", path = "crates/verve-sys" }
+verve-ui-kit = { version = "=0.0.1", path = "crates/verve-ui-kit" }
+
+# Shared external crates for the 0.0.1 headless stack
+arc-swap = "1.9"
+async-channel = "2.5"
+bytes = "1.12"
+directories = "6.0"
+futures-util = "0.3"
+http = "1.5"
+http-body-util = "0.1"
+hyper = { version = "1.13", features = ["client", "server", "http1"] }
+hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "server", "tokio"] }
+percent-encoding = "2.3"
+postcard = { version = "1.2", features = ["alloc", "use-std"] }
+rusqlite = { version = "0.43", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml_ng = "0.10"
+sha2 = "0.11"
+tempfile = "3.27"
+thiserror = "2.0"
+tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "sync", "time", "process", "io-util", "net", "fs", "signal"] }
+tokio-tungstenite = "0.30"
+tokio-util = { version = "0.7", features = ["rt"] }
+toml = "1.2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_Storage_FileSystem", "Win32_System_Pipes"] }
