@@ -633,7 +633,7 @@ mod linux_ksni {
 
         fn icon_pixmap(&self) -> Vec<ksni::Icon> {
             let mut data = render_tray_icon_rgba(self.state.icon_state(), ICON_SIZE);
-            for chunk in data.chunks_exact_mut(4) {
+            for chunk in data.as_chunks_mut::<4>().0 {
                 chunk.rotate_right(1);
             }
             vec![ksni::Icon {
@@ -698,7 +698,6 @@ mod linux_ksni {
                             ..Default::default()
                         },
                     ],
-                    ..Default::default()
                 }
                 .into(),
                 ksni::MenuItem::Separator,
