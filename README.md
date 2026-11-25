@@ -4,7 +4,7 @@ English | [中文](README.zh.md)
 
 Verve is a cross-platform (Windows / macOS / Linux) native desktop proxy client built with **Rust** and **GPUI (`gpui-material`)**. It targets the **Mihomo** kernel first with decoupled abstractions, native **YAML Merge** and sandboxed **JavaScript** configuration overrides, and a clean Material 3 Expressive interface.
 
-> **Status:** Early pre-release planning (`0.0.x` in progress). The first daily-usable release is targeted at **`0.1.0`**. See [Versioning and releases](docs/release.md) for the full versioned roadmap.
+> **Status:** Early pre-release development (`0.0.x` in progress), reaching daily-usable P0 parity at **`0.0.3`** and the first stable multi-platform release at **`0.1.0`**. See [Versioning and releases](docs/release.md) for the full versioned roadmap.
 
 ## Design goals
 
@@ -21,11 +21,11 @@ Development proceeds strictly by semantic milestones rather than abstract phases
 | --- | --- |
 | `0.0.1` | Workspace skeleton and headless kernel loop (`verve-config`, `verve-kernel`, `verve-kernel-mihomo`, `verve-compiler` Merge + preflight, `verve-core`). |
 | `0.0.2` | Native UI kit (`verve-ui-kit`), OS integration (`verve-sys`), privileged supervisor (`verve-service`), and `verve-app` shell + tray + `UiStore` bridge. |
-| **`0.1.0`** | **First daily-usable release (P0 core):** Overview, Proxies, Profiles, essential Network & Appearance Settings, system proxy, and TUN mode. |
-| `0.2.0` | Native `verve-editor` (YAML/JS + diagnostics), QuickJS override sandbox, Activity center (Connections + one-click Add Rule, Rules, Logs), and Proxy/Rule Providers. |
-| `0.3.0` | `verve-sync` (local encrypted archive & WebDAV), DNS override dual-mode, GeoData updates, i18n (`zh-CN` / `en-US`), and full Settings coverage. |
-| `0.4.0` | Global hotkeys, on-demand exit IP lookup, external TCP controller (opt-in), sanitized diagnostics export, and cross-platform polish. |
-| `1.0.0` | Stable configuration schema migration guarantees, frozen `verve-protocol` IPC contract, and automated three-platform release pipelines. |
+| **`0.0.3`** | **First daily-usable milestone (P0 core):** Overview, Proxies, Profiles, essential Network & Appearance Settings, system proxy, and TUN mode. |
+| `0.0.4` | Native `verve-editor` (YAML/JS + diagnostics), QuickJS override sandbox, Activity center (Connections + one-click Add Rule, Rules, Logs), and Proxy/Rule Providers. |
+| `0.0.5` | `verve-sync` (local encrypted archive & WebDAV), DNS override dual-mode, GeoData updates, i18n (`zh-CN` / `en-US`), and full Settings coverage. |
+| `0.0.6` | Global hotkeys, on-demand exit IP lookup, external TCP controller (opt-in), sanitized diagnostics export, and cross-platform polish. |
+| **`0.1.0`** | **First public stable contract & multi-platform release:** Freeze `verve-config` forward migration guarantees, lock `verve-protocol` v1 IPC stability, and finalize signed three-platform automated GitHub Releases. |
 
 ## Project documentation
 

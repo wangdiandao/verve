@@ -16,7 +16,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 rust-version = "1.95.0"
 license = "GPL-3.0-or-later"
@@ -26,36 +26,47 @@ publish = false
 
 [workspace.dependencies]
 # Internal workspace crates
-verve-app = { version = "=0.0.1", path = "crates/verve-app" }
-verve-compiler = { version = "=0.0.1", path = "crates/verve-compiler" }
-verve-config = { version = "=0.0.1", path = "crates/verve-config" }
-verve-core = { version = "=0.0.1", path = "crates/verve-core" }
-verve-editor = { version = "=0.0.1", path = "crates/verve-editor" }
-verve-kernel = { version = "=0.0.1", path = "crates/verve-kernel" }
-verve-kernel-mihomo = { version = "=0.0.1", path = "crates/verve-kernel-mihomo" }
-verve-protocol = { version = "=0.0.1", path = "crates/verve-protocol" }
-verve-service = { version = "=0.0.1", path = "crates/verve-service" }
-verve-sync = { version = "=0.0.1", path = "crates/verve-sync" }
-verve-sys = { version = "=0.0.1", path = "crates/verve-sys" }
-verve-ui-kit = { version = "=0.0.1", path = "crates/verve-ui-kit" }
+verve-app = { version = "=0.0.2", path = "crates/verve-app" }
+verve-compiler = { version = "=0.0.2", path = "crates/verve-compiler" }
+verve-config = { version = "=0.0.2", path = "crates/verve-config" }
+verve-core = { version = "=0.0.2", path = "crates/verve-core" }
+verve-editor = { version = "=0.0.2", path = "crates/verve-editor" }
+verve-kernel = { version = "=0.0.2", path = "crates/verve-kernel" }
+verve-kernel-mihomo = { version = "=0.0.2", path = "crates/verve-kernel-mihomo" }
+verve-protocol = { version = "=0.0.2", path = "crates/verve-protocol" }
+verve-service = { version = "=0.0.2", path = "crates/verve-service" }
+verve-sync = { version = "=0.0.2", path = "crates/verve-sync" }
+verve-sys = { version = "=0.0.2", path = "crates/verve-sys" }
+verve-ui-kit = { version = "=0.0.2", path = "crates/verve-ui-kit" }
 
-# Shared external crates for the 0.0.1 headless stack
+# Shared external crates for the workspace stack
 arc-swap = "1.9"
 async-channel = "2.5"
+auto-launch = "0.6"
 bytes = "1.12"
 directories = "6.0"
 futures-util = "0.3"
+gpui = { package = "gpui-pre", version = "=0.3.14" }
+gpui-base = "=0.11.0"
+gpui-material = { version = "=0.4.0", features = ["dynamic-color", "expressive-groups", "search", "toolbars", "window-chrome"] }
+gpui-material-symbols = { version = "0.3.0", default-features = false, features = ["embed-assets"] }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.14", features = ["font-kit", "x11", "wayland", "runtime_shaders"] }
 http = "1.5"
 http-body-util = "0.1"
 hyper = { version = "1.13", features = ["client", "server", "http1"] }
 hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "server", "tokio"] }
+ksni = "0.3"
+libc = "0.2"
 percent-encoding = "2.3"
 postcard = { version = "1.2", features = ["alloc", "use-std"] }
 rusqlite = { version = "0.43", features = ["bundled"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 serde_yaml_ng = "0.10"
+service-manager = "0.11"
 sha2 = "0.11"
+single-instance = "0.3"
+sysproxy = "0.3"
 tempfile = "3.27"
 thiserror = "2.0"
 tokio = { version = "1.54", features = ["rt-multi-thread", "macros", "sync", "time", "process", "io-util", "net", "fs", "signal"] }
@@ -64,4 +75,36 @@ tokio-util = { version = "0.7", features = ["rt"] }
 toml = "1.2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_Storage_FileSystem", "Win32_System_Pipes"] }
+tray-icon = "0.26"
+windows-service = "0.8"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Storage_FileSystem", "Win32_System_JobObjects", "Win32_System_Pipes", "Win32_System_Threading"] }
+
+[profile.dev]
+debug = 0
+
+[profile.dev.package]
+gpui-base = { opt-level = 3 }
+gpui-pre = { opt-level = 3 }
+gpui-pre-linux = { opt-level = 3 }
+gpui-pre-macos = { opt-level = 3 }
+gpui-pre-platform = { opt-level = 3 }
+gpui-pre-sum-tree = { opt-level = 3 }
+gpui-pre-wgpu = { opt-level = 3 }
+gpui-pre-windows = { opt-level = 3 }
+harfrust = { opt-level = 3 }
+image = { opt-level = 3 }
+kurbo = { opt-level = 3 }
+lyon_geom = { opt-level = 3 }
+lyon_path = { opt-level = 3 }
+material-color-utils = { opt-level = 3 }
+read-fonts = { opt-level = 3 }
+resvg = { opt-level = 3 }
+ropey = { opt-level = 3 }
+rustybuzz = { opt-level = 3 }
+skrifa = { opt-level = 3 }
+smol = { opt-level = 3 }
+taffy = { opt-level = 3 }
+tiny-skia = { opt-level = 3 }
+ttf-parser = { opt-level = 3 }
+usvg = { opt-level = 3 }
+zune-inflate = { opt-level = 3 }
