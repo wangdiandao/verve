@@ -2,7 +2,10 @@
 
 use std::collections::VecDeque;
 use std::ffi::OsStr;
+use std::fmt;
+use std::future::Future;
 use std::path::Path;
+use std::pin::Pin;
 use std::process::Stdio;
 use std::sync::{Arc, Mutex};
 
@@ -119,7 +122,6 @@ mod windows_job {
 
 /// Process supervisor strategy selected via static enum dispatch.
 #[derive(Debug)]
-// `DaemonIpcSupervisor` is a zero-sized stub until `0.0.2`, and `KernelSupervisor` is instantiated once.
 #[allow(clippy::large_enum_variant)]
 pub enum KernelSupervisor {
     /// Spawns and supervises the kernel directly as an unprivileged child process.
@@ -366,44 +368,204 @@ impl Drop for DirectProcessSupervisor {
     }
 }
 
-/// Placeholder supervisor for delegating privileged kernel execution to `verve-service` (`0.0.2`).
-#[derive(Debug, Default)]
-pub struct DaemonIpcSupervisor;
+/// Kernel process status snapshot reported by a remote [`ServiceIpcClient`].
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct RemoteKernelStatus {
+    /// Whether a supervised kernel process is currently alive.
+    pub running: bool,
+    /// Operating system process ID when `running` is `true`.
+    pub pid: Option<u32>,
+    /// Active control endpoint bound by the supervised kernel, if any.
+    pub ctrl_endpoint: Option<String>,
+}
+
+/// Dyn-compatible IPC client contract for delegating kernel lifecycle to `verve-service`.
+///
+/// Defined in `verve-kernel` without pulling `verve-protocol` into the lower crate DAG.
+pub trait ServiceIpcClient: Send + Sync + 'static {
+    /// Requests the remote privileged daemon to validate and spawn the kernel process.
+    fn start_remote<'a>(
+        &'a self,
+        kernel_id: &'a str,
+        bin_path: &'a Path,
+        work_dir: &'a Path,
+        config_path: &'a Path,
+        ctrl_endpoint: &'a str,
+    ) -> Pin<Box<dyn Future<Output = Result<u32, KernelError>> + Send + 'a>>;
+
+    /// Requests the remote privileged daemon to stop the supervised kernel process.
+    fn stop_remote<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<(), KernelError>> + Send + 'a>>;
+
+    /// Queries the current remote kernel supervision status.
+    fn query_remote_status<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<RemoteKernelStatus, KernelError>> + Send + 'a>>;
+
+    /// Fetches up to `max_lines` trailing stderr lines from the remote supervised kernel.
+    fn read_remote_stderr_tail<'a>(
+        &'a self,
+        max_lines: usize,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<String>, KernelError>> + Send + 'a>>;
+}
+
+/// Supervisor that delegates privileged kernel execution over local IPC to `verve-service`.
+pub struct DaemonIpcSupervisor {
+    client: Option<Arc<dyn ServiceIpcClient>>,
+    kernel_id: String,
+    ctrl_endpoint: String,
+    running: bool,
+    pid: Option<u32>,
+    cached_stderr: Mutex<Vec<String>>,
+}
+
+impl fmt::Debug for DaemonIpcSupervisor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("DaemonIpcSupervisor")
+            .field("configured", &self.client.is_some())
+            .field("kernel_id", &self.kernel_id)
+            .field("ctrl_endpoint", &self.ctrl_endpoint)
+            .field("running", &self.running)
+            .field("pid", &self.pid)
+            .finish()
+    }
+}
+
+impl Default for DaemonIpcSupervisor {
+    fn default() -> Self {
+        Self::unconfigured()
+    }
+}
 
 impl DaemonIpcSupervisor {
-    /// Creates a new privileged daemon IPC supervisor handle.
-    pub fn new() -> Self {
-        Self
+    /// Creates an unconfigured daemon supervisor whose operations return [`KernelError::ServiceUnavailable`].
+    pub fn unconfigured() -> Self {
+        Self {
+            client: None,
+            kernel_id: String::from("mihomo"),
+            ctrl_endpoint: String::new(),
+            running: false,
+            pid: None,
+            cached_stderr: Mutex::new(Vec::new()),
+        }
     }
 
-    /// Returns [`KernelError::ServiceUnavailable`] until `verve-service` IPC is wired in `0.0.2`.
+    /// Creates a configured daemon IPC supervisor backed by `client`.
+    pub fn new(
+        client: Arc<dyn ServiceIpcClient>,
+        kernel_id: impl Into<String>,
+        ctrl_endpoint: impl Into<String>,
+    ) -> Self {
+        Self {
+            client: Some(client),
+            kernel_id: kernel_id.into(),
+            ctrl_endpoint: ctrl_endpoint.into(),
+            running: false,
+            pid: None,
+            cached_stderr: Mutex::new(Vec::new()),
+        }
+    }
+
+    /// Returns the logical kernel identifier passed to the remote service.
+    pub fn kernel_id(&self) -> &str {
+        &self.kernel_id
+    }
+
+    /// Returns the control endpoint string configured for this supervisor, if non-empty.
+    pub fn ctrl_endpoint(&self) -> Option<&str> {
+        (!self.ctrl_endpoint.is_empty()).then_some(self.ctrl_endpoint.as_str())
+    }
+
+    /// Delegates kernel startup to the remote `verve-service` over IPC.
     pub async fn start(
         &mut self,
-        _bin_path: &Path,
-        _work_dir: &Path,
-        _config_path: &Path,
+        bin_path: &Path,
+        work_dir: &Path,
+        config_path: &Path,
     ) -> Result<u32, KernelError> {
-        Err(KernelError::ServiceUnavailable)
+        let client = self
+            .client
+            .as_ref()
+            .ok_or(KernelError::ServiceUnavailable)?;
+        let pid = client
+            .start_remote(
+                &self.kernel_id,
+                bin_path,
+                work_dir,
+                config_path,
+                &self.ctrl_endpoint,
+            )
+            .await?;
+        self.running = true;
+        self.pid = Some(pid);
+        if let Ok(mut guard) = self.cached_stderr.lock() {
+            guard.clear();
+        }
+        Ok(pid)
     }
 
-    /// Returns [`KernelError::ServiceUnavailable`] until `verve-service` IPC is wired in `0.0.2`.
+    /// Delegates stopping the remote kernel process to `verve-service`.
     pub async fn stop(&mut self) -> Result<(), KernelError> {
-        Err(KernelError::ServiceUnavailable)
+        let client = self
+            .client
+            .as_ref()
+            .ok_or(KernelError::ServiceUnavailable)?;
+        client.stop_remote().await?;
+        self.running = false;
+        self.pid = None;
+        Ok(())
     }
 
-    /// Returns `None` while daemon IPC is unimplemented.
+    /// Refreshes cached running/PID status from the remote daemon.
+    pub async fn refresh_status(&mut self) -> Result<RemoteKernelStatus, KernelError> {
+        let client = self
+            .client
+            .as_ref()
+            .ok_or(KernelError::ServiceUnavailable)?;
+        let status = client.query_remote_status().await?;
+        self.running = status.running;
+        self.pid = status.pid;
+        if let Some(endpoint) = &status.ctrl_endpoint {
+            self.ctrl_endpoint = endpoint.clone();
+        }
+        Ok(status)
+    }
+
+    /// Fetches up to `max_lines` trailing stderr lines from the remote daemon and updates cache.
+    pub async fn fetch_stderr_tail(&self, max_lines: usize) -> Result<Vec<String>, KernelError> {
+        let client = self
+            .client
+            .as_ref()
+            .ok_or(KernelError::ServiceUnavailable)?;
+        let lines = client.read_remote_stderr_tail(max_lines).await?;
+        if let Ok(mut guard) = self.cached_stderr.lock() {
+            *guard = lines.clone();
+        }
+        Ok(lines)
+    }
+
+    /// Returns the cached OS process ID if the remote kernel is thought to be running.
     pub fn pid(&self) -> Option<u32> {
-        None
+        self.pid
     }
 
-    /// Returns `false` while daemon IPC is unimplemented.
+    /// Returns the cached running state from the last `start`, `stop`, or `refresh_status`.
     pub fn is_running(&self) -> bool {
-        false
+        self.running
     }
 
-    /// Returns an empty vector while daemon IPC is unimplemented.
-    pub fn stderr_tail(&self, _max_lines: usize) -> Vec<String> {
-        Vec::new()
+    /// Returns up to `max_lines` cached trailing stderr lines fetched via [`Self::fetch_stderr_tail`].
+    pub fn stderr_tail(&self, max_lines: usize) -> Vec<String> {
+        if max_lines == 0 {
+            return Vec::new();
+        }
+        let guard = self
+            .cached_stderr
+            .lock()
+            .expect("cached stderr mutex poisoned");
+        let skip = guard.len().saturating_sub(max_lines);
+        guard.iter().skip(skip).cloned().collect()
     }
 }
 
@@ -479,8 +641,8 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn daemon_supervisor_returns_service_unavailable() {
-        let mut supervisor = KernelSupervisor::Service(DaemonIpcSupervisor::new());
+    async fn daemon_supervisor_unconfigured_returns_service_unavailable() {
+        let mut supervisor = KernelSupervisor::Service(DaemonIpcSupervisor::unconfigured());
         assert!(!supervisor.is_running());
         assert_eq!(supervisor.pid(), None);
         assert!(supervisor.stderr_tail(10).is_empty());
@@ -492,13 +654,134 @@ mod tests {
                 Path::new("config.yaml"),
             )
             .await
-            .expect_err("service supervisor stub must report unavailable");
+            .expect_err("unconfigured service supervisor must report unavailable");
         assert!(matches!(err, KernelError::ServiceUnavailable));
 
         let stop_err = supervisor
             .stop()
             .await
-            .expect_err("service supervisor stub must report unavailable on stop");
+            .expect_err("unconfigured service supervisor must report unavailable on stop");
         assert!(matches!(stop_err, KernelError::ServiceUnavailable));
+    }
+
+    struct MockServiceIpcClient {
+        state: Mutex<RemoteKernelStatus>,
+        stderr: Mutex<Vec<String>>,
+    }
+
+    impl MockServiceIpcClient {
+        fn new(stderr_lines: Vec<String>) -> Self {
+            Self {
+                state: Mutex::new(RemoteKernelStatus::default()),
+                stderr: Mutex::new(stderr_lines),
+            }
+        }
+    }
+
+    impl ServiceIpcClient for MockServiceIpcClient {
+        fn start_remote<'a>(
+            &'a self,
+            _kernel_id: &'a str,
+            _bin_path: &'a Path,
+            _work_dir: &'a Path,
+            _config_path: &'a Path,
+            ctrl_endpoint: &'a str,
+        ) -> Pin<Box<dyn Future<Output = Result<u32, KernelError>> + Send + 'a>> {
+            Box::pin(async move {
+                let mut guard = self.state.lock().unwrap();
+                if guard.running {
+                    return Err(KernelError::AlreadyRunning {
+                        pid: guard.pid.unwrap_or(0),
+                    });
+                }
+                guard.running = true;
+                guard.pid = Some(9527);
+                guard.ctrl_endpoint = Some(ctrl_endpoint.to_owned());
+                Ok(9527)
+            })
+        }
+
+        fn stop_remote<'a>(
+            &'a self,
+        ) -> Pin<Box<dyn Future<Output = Result<(), KernelError>> + Send + 'a>> {
+            Box::pin(async move {
+                let mut guard = self.state.lock().unwrap();
+                if !guard.running {
+                    return Err(KernelError::NotRunning);
+                }
+                guard.running = false;
+                guard.pid = None;
+                Ok(())
+            })
+        }
+
+        fn query_remote_status<'a>(
+            &'a self,
+        ) -> Pin<Box<dyn Future<Output = Result<RemoteKernelStatus, KernelError>> + Send + 'a>>
+        {
+            Box::pin(async move { Ok(self.state.lock().unwrap().clone()) })
+        }
+
+        fn read_remote_stderr_tail<'a>(
+            &'a self,
+            max_lines: usize,
+        ) -> Pin<Box<dyn Future<Output = Result<Vec<String>, KernelError>> + Send + 'a>> {
+            Box::pin(async move {
+                let guard = self.stderr.lock().unwrap();
+                let skip = guard.len().saturating_sub(max_lines);
+                Ok(guard.iter().skip(skip).cloned().collect())
+            })
+        }
+    }
+
+    #[tokio::test]
+    async fn daemon_supervisor_delegates_lifecycle_and_status_to_ipc_client() {
+        let client = Arc::new(MockServiceIpcClient::new(vec![
+            "boot".into(),
+            "ready".into(),
+            "serving".into(),
+        ]));
+        let mut sup = DaemonIpcSupervisor::new(client.clone(), "mihomo", r"\\.\pipe\verve-test");
+
+        assert!(!sup.is_running());
+        assert_eq!(sup.pid(), None);
+        assert_eq!(sup.kernel_id(), "mihomo");
+        assert_eq!(sup.ctrl_endpoint(), Some(r"\\.\pipe\verve-test"));
+
+        let pid = sup
+            .start(
+                Path::new("mihomo"),
+                Path::new("."),
+                Path::new("config.yaml"),
+            )
+            .await
+            .expect("mock remote start should succeed");
+        assert_eq!(pid, 9527);
+        assert!(sup.is_running());
+        assert_eq!(sup.pid(), Some(9527));
+
+        let status = sup
+            .refresh_status()
+            .await
+            .expect("refresh_status should succeed");
+        assert_eq!(
+            status,
+            RemoteKernelStatus {
+                running: true,
+                pid: Some(9527),
+                ctrl_endpoint: Some(r"\\.\pipe\verve-test".into()),
+            }
+        );
+
+        let tail = sup
+            .fetch_stderr_tail(2)
+            .await
+            .expect("fetch_stderr_tail should succeed");
+        assert_eq!(tail, vec!["ready", "serving"]);
+        assert_eq!(sup.stderr_tail(1), vec!["serving"]);
+
+        sup.stop().await.expect("mock remote stop should succeed");
+        assert!(!sup.is_running());
+        assert_eq!(sup.pid(), None);
     }
 }
