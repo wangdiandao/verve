@@ -1,0 +1,32 @@
+[package]
+name = "verve-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+publish.workspace = true
+
+[dependencies]
+arc-swap.workspace = true
+async-channel.workspace = true
+futures-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml_ng.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+verve-compiler.workspace = true
+verve-config.workspace = true
+verve-kernel.workspace = true
+verve-kernel-mihomo.workspace = true
+verve-protocol.workspace = true
+verve-sync.workspace = true
+verve-sys.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

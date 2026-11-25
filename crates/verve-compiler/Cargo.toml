@@ -1,0 +1,18 @@
+[package]
+name = "verve-compiler"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+serde_yaml_ng.workspace = true
+tempfile.workspace = true
+thiserror.workspace = true
+verve-config.workspace = true
+verve-kernel.workspace = true
