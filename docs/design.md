@@ -27,7 +27,7 @@ Priority tiers:
 | Light / Dark / System appearance & dynamic accent color | **P0** | Driven by `gpui-material` seed schemes. |
 | Resident system tray & release GPU resources on window close | **P0** | Closing main window destroys the GPUI window; tray menu exposes Mode / SysProxy / TUN / Quit. |
 | Single instance, auto-launch, silent start | **P1** | Built into `verve-sys` and General settings. |
-| Bilingual UI (`zh-CN` / `en-US`) | **P1** | Managed via `rust-i18n`; no inline `if zh {} else {}` branching. |
+| Bilingual UI (`zh-CN` / `en-US`) | **P0 (`0.0.2`)** | Delivered with the `0.0.2` UI shell foundation; managed via `rust-i18n` across desktop UI and tray menu with instant switching and no inline `if zh {} else {}` branching. |
 | Global hotkeys (System Proxy / TUN / Mode / Toggle Window) | **P2** | Restricted to 4–5 core actions; drop obscure actions like reactivate profile. |
 | Exit confirmation dialog | **P2** | Optional on tray quit; window close defaults to minimize-to-tray. |
 | Sidebar icon modes (monochrome / colorful / hidden) | **Drop** | Breaks M3 visual hierarchy; use consistent M3 icon styling. |

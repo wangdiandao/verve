@@ -508,6 +508,10 @@ impl<K: ProxyKernel> AppCoordinator<K> {
                     let res = self.handle_set_theme_mode(mode);
                     send_reply("set_theme_mode", reply, res);
                 }
+                AppCommand::SetLocale { locale, reply } => {
+                    let res = self.handle_set_locale(locale);
+                    send_reply("set_locale", reply, res);
+                }
                 AppCommand::RefreshRules { reply } => {
                     let res = self.handle_refresh_rules().await;
                     send_reply("refresh_rules", reply, res);
@@ -901,6 +905,16 @@ impl<K: ProxyKernel> AppCoordinator<K> {
         }
 
         self.syncable.theme_mode = normalized;
+        self.config_manager.save_syncable(&self.syncable)?;
+        self.snapshots.publish_settings(|settings| {
+            settings.syncable = self.syncable.clone();
+        });
+        Ok(())
+    }
+
+    fn handle_set_locale(&mut self, locale: String) -> Result<(), CoreError> {
+        let normalized = verve_config::normalize_locale(&locale)?;
+        self.syncable.locale = normalized;
         self.config_manager.save_syncable(&self.syncable)?;
         self.snapshots.publish_settings(|settings| {
             settings.syncable = self.syncable.clone();

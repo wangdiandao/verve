@@ -14,7 +14,7 @@ pub use local::LocalMachineConfig;
 pub use manager::ConfigManager;
 pub use schema::CURRENT_SCHEMA_VERSION;
 pub use state::{ProfileUsage, StateStore};
-pub use syncable::{ProfileEntry, ProfileSource, SyncableConfig};
+pub use syncable::{ProfileEntry, ProfileSource, SyncableConfig, normalize_locale};
 
 #[cfg(test)]
 mod tests {
@@ -170,6 +170,37 @@ mod tests {
             cfg.to_toml_string(),
             Err(ConfigError::InvalidField {
                 field: "profiles.file_name",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn locale_normalization_and_validation() {
+        for raw in ["zh", "zh-cn", "zh_cn", " ZH-CN ", "Zh_Cn"] {
+            assert_eq!(normalize_locale(raw).unwrap(), "zh-CN");
+        }
+        for raw in ["en", "en-us", "en_us", " EN-US ", "En_Us"] {
+            assert_eq!(normalize_locale(raw).unwrap(), "en-US");
+        }
+
+        for invalid in ["", "   ", "fr-FR", "zh-TW", "de"] {
+            assert!(matches!(
+                normalize_locale(invalid),
+                Err(ConfigError::InvalidField {
+                    field: "locale",
+                    ..
+                })
+            ));
+        }
+
+        let cfg = SyncableConfig::from_toml_str("locale = \"en_us\"\n").unwrap();
+        assert_eq!(cfg.locale, "en-US");
+
+        assert!(matches!(
+            SyncableConfig::from_toml_str("locale = \"ja-JP\"\n"),
+            Err(ConfigError::InvalidField {
+                field: "locale",
                 ..
             })
         ));

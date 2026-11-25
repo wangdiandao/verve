@@ -33,7 +33,10 @@ impl ProfilesView {
         cx: &mut Context<Self>,
     ) -> Self {
         let store_sub = cx.subscribe(&store, |_, _, ev: &DomainChanged, cx| {
-            if matches!(ev.0, DomainKind::Profiles | DomainKind::Runtime) {
+            if matches!(
+                ev.0,
+                DomainKind::Profiles | DomainKind::Runtime | DomainKind::Settings
+            ) {
                 cx.notify();
             }
         });
@@ -67,7 +70,7 @@ impl Render for ProfilesView {
                     .text_xl()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(tokens.on_surface)
-                    .child("Profiles"),
+                    .child(rust_i18n::t!("profiles.title").into_owned()),
             );
 
         if let Some(diag) = profiles.last_compile_diagnostic.as_ref() {
@@ -76,15 +79,15 @@ impl Render for ProfilesView {
                     "profiles-compile-diagnostic",
                     format!("[{}] {}", diag.stage, diag.message),
                 )
-                .title("Last profile compile failed")
+                .title(rust_i18n::t!("profiles.compile_failed").into_owned())
                 .tone(SemanticTone::Danger),
             );
         }
 
         if profiles.profiles.is_empty() {
             return root.child(EmptyState::new(
-                "No profiles configured",
-                "Import a local or remote YAML profile through verve-core to compile and activate it.",
+                rust_i18n::t!("profiles.empty.title").into_owned(),
+                rust_i18n::t!("profiles.empty.desc").into_owned(),
             ));
         }
 
@@ -93,8 +96,12 @@ impl Render for ProfilesView {
             let usage = profiles.usages.get(&entry.id).cloned();
 
             let source_desc = match &entry.source {
-                ProfileSource::Local => format!("Local · {}", entry.file_name),
-                ProfileSource::Remote { url, .. } => format!("Remote · {url}"),
+                ProfileSource::Local => {
+                    rust_i18n::t!("profiles.source_local", file = entry.file_name).into_owned()
+                }
+                ProfileSource::Remote { url, .. } => {
+                    rust_i18n::t!("profiles.source_remote", url = url).into_owned()
+                }
             };
 
             let activate_cmd = self.commands.clone();
@@ -104,34 +111,44 @@ impl Render for ProfilesView {
             let inspect_entry = entry.clone();
             let inspect_usage = usage.clone();
 
+            let active_label = rust_i18n::t!("profiles.status.active").into_owned();
+            let inactive_label = rust_i18n::t!("profiles.status.inactive").into_owned();
+
             let actions = div()
                 .flex()
                 .flex_row()
                 .items_center()
                 .gap(px(8.0))
                 .child(
-                    Button::new(("profile-inspect", idx), "Details")
-                        .variant(ButtonVariant::Outlined)
-                        .on_activate(move |window, cx| {
-                            let detail_view = cx.new(|_| ProfileDetailSheet {
-                                entry: inspect_entry.clone(),
-                                usage: inspect_usage.clone(),
-                                active: is_active,
-                            });
-                            inspect_shell.open_sheet(
-                                SideSheetSpec::new(
-                                    format!("Profile: {}", inspect_entry.name),
-                                    detail_view.into(),
-                                ),
-                                window,
-                                cx,
-                            );
-                        }),
+                    Button::new(
+                        ("profile-inspect", idx),
+                        rust_i18n::t!("profiles.details_btn").into_owned(),
+                    )
+                    .variant(ButtonVariant::Outlined)
+                    .on_activate(move |window, cx| {
+                        let sheet_title =
+                            rust_i18n::t!("profiles.sheet.title", name = inspect_entry.name)
+                                .into_owned();
+                        let detail_view = cx.new(|_| ProfileDetailSheet {
+                            entry: inspect_entry.clone(),
+                            usage: inspect_usage.clone(),
+                            active: is_active,
+                        });
+                        inspect_shell.open_sheet(
+                            SideSheetSpec::new(sheet_title, detail_view.into()),
+                            window,
+                            cx,
+                        );
+                    }),
                 )
                 .child(
                     Button::new(
                         ("profile-activate", idx),
-                        if is_active { "Active" } else { "Activate" },
+                        if is_active {
+                            active_label.clone()
+                        } else {
+                            rust_i18n::t!("profiles.activate_btn").into_owned()
+                        },
                     )
                     .variant(if is_active {
                         ButtonVariant::FilledTonal
@@ -148,9 +165,9 @@ impl Render for ProfilesView {
                 .title(entry.name.clone())
                 .subtitle(source_desc)
                 .header_trailing(if is_active {
-                    HealthIndicator::new(KernelHealthState::Running).label("Active")
+                    HealthIndicator::new(KernelHealthState::Running).label(active_label)
                 } else {
-                    HealthIndicator::new(KernelHealthState::Stopped).label("Inactive")
+                    HealthIndicator::new(KernelHealthState::Stopped).label(inactive_label)
                 });
 
             if let Some(u) = usage {
@@ -160,8 +177,14 @@ impl Render for ProfilesView {
                         .flex_row()
                         .flex_wrap()
                         .gap(px(12.0))
-                        .child(MetricTile::new("Download", format_bytes(u.download_bytes)))
-                        .child(MetricTile::new("Upload", format_bytes(u.upload_bytes))),
+                        .child(MetricTile::new(
+                            rust_i18n::t!("common.download").into_owned(),
+                            format_bytes(u.download_bytes),
+                        ))
+                        .child(MetricTile::new(
+                            rust_i18n::t!("common.upload").into_owned(),
+                            format_bytes(u.upload_bytes),
+                        )),
                 );
             }
 
@@ -183,14 +206,23 @@ impl Render for ProfileDetailSheet {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let tokens = theme_tokens(cx);
         let source_label = match &self.entry.source {
-            ProfileSource::Local => "Local YAML".to_owned(),
+            ProfileSource::Local => rust_i18n::t!("profiles.sheet.source_local").into_owned(),
             ProfileSource::Remote {
                 url,
                 update_interval_mins,
-            } => format!(
-                "Remote ({url}, interval: {}m)",
-                update_interval_mins.unwrap_or(0)
-            ),
+            } => rust_i18n::t!(
+                "profiles.sheet.source_remote",
+                url = url,
+                mins = update_interval_mins.unwrap_or(0)
+            )
+            .into_owned(),
+        };
+
+        let none_label = rust_i18n::t!("common.none").into_owned();
+        let status_label = if self.active {
+            rust_i18n::t!("profiles.status.active").into_owned()
+        } else {
+            rust_i18n::t!("profiles.status.inactive").into_owned()
         };
 
         div()
@@ -198,36 +230,43 @@ impl Render for ProfileDetailSheet {
             .flex()
             .flex_col()
             .gap(px(12.0))
-            .child(MetricTile::new("Profile ID", self.entry.id.clone()))
             .child(MetricTile::new(
-                "Status",
-                if self.active { "Active" } else { "Inactive" },
+                rust_i18n::t!("profiles.sheet.profile_id").into_owned(),
+                self.entry.id.clone(),
             ))
-            .child(MetricTile::new("Source", source_label))
-            .child(MetricTile::new("YAML File", self.entry.file_name.clone()))
             .child(MetricTile::new(
-                "Merge Override",
+                rust_i18n::t!("profiles.sheet.status").into_owned(),
+                status_label,
+            ))
+            .child(MetricTile::new(
+                rust_i18n::t!("profiles.sheet.source").into_owned(),
+                source_label,
+            ))
+            .child(MetricTile::new(
+                rust_i18n::t!("profiles.sheet.yaml_file").into_owned(),
+                self.entry.file_name.clone(),
+            ))
+            .child(MetricTile::new(
+                rust_i18n::t!("profiles.sheet.merge_override").into_owned(),
                 self.entry
                     .merge_file_name
                     .clone()
-                    .unwrap_or_else(|| "None".into()),
+                    .unwrap_or_else(|| none_label.clone()),
             ))
             .child(MetricTile::new(
-                "Script Override",
-                self.entry
-                    .script_file_name
-                    .clone()
-                    .unwrap_or_else(|| "None".into()),
+                rust_i18n::t!("profiles.sheet.script_override").into_owned(),
+                self.entry.script_file_name.clone().unwrap_or(none_label),
             ))
             .child(div().text_xs().text_color(tokens.on_surface_variant).child(
                 self.usage.as_ref().map_or_else(
-                    || "No subscription usage metadata stored in state.db.".to_owned(),
+                    || rust_i18n::t!("profiles.sheet.no_usage").into_owned(),
                     |u| {
-                        format!(
-                            "Recorded traffic: {} down / {} up",
-                            format_bytes(u.download_bytes),
-                            format_bytes(u.upload_bytes)
+                        rust_i18n::t!(
+                            "profiles.sheet.recorded_usage",
+                            down = format_bytes(u.download_bytes),
+                            up = format_bytes(u.upload_bytes)
                         )
+                        .into_owned()
                     },
                 ),
             ))

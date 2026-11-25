@@ -177,8 +177,9 @@ pub fn run_desktop_app() {
     gpui_platform::application()
         .with_quit_mode(QuitMode::Explicit)
         .run(move |cx: &mut App| {
-            let initial_theme_str = snapshots.snapshot().settings.syncable.theme_mode.clone();
-            let mode = AppearanceMode::from_config_str(&initial_theme_str)
+            let syncable = snapshots.snapshot().settings.syncable.clone();
+            crate::i18n::apply_locale(&syncable.locale);
+            let mode = AppearanceMode::from_config_str(&syncable.theme_mode)
                 .unwrap_or(AppearanceMode::System);
             let system_dark = matches!(
                 cx.window_appearance(),

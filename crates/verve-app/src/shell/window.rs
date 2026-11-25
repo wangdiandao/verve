@@ -67,6 +67,16 @@ impl ActiveRouteView {
             Self::Settings(view) => view.clone().into_any_element(),
         }
     }
+
+    fn notify(&self, cx: &mut App) {
+        match self {
+            Self::Overview(view) => view.update(cx, |_, cx| cx.notify()),
+            Self::Proxies(view) => view.update(cx, |_, cx| cx.notify()),
+            Self::Profiles(view) => view.update(cx, |_, cx| cx.notify()),
+            Self::Activity(view) => view.update(cx, |_, cx| cx.notify()),
+            Self::Settings(view) => view.update(cx, |_, cx| cx.notify()),
+        }
+    }
 }
 
 /// Root window view hosting the 40px TitleBar, adaptive NavigationDrawer/Rail,
@@ -116,13 +126,13 @@ impl AppShell {
             Self::build_route_view(initial_route, &store, &commands, &shell_handle, cx);
         let telemetry_lease = store.read(cx).acquire_telemetry(TelemetryKind::Traffic);
 
-        let store_sub = cx.subscribe(&store, |_this, store, ev: &DomainChanged, cx| match ev.0 {
+        let store_sub = cx.subscribe(&store, |this, store, ev: &DomainChanged, cx| match ev.0 {
             DomainKind::Runtime | DomainKind::Telemetry | DomainKind::Activity => {
                 cx.notify();
             }
             DomainKind::Settings => {
-                let theme_str = store.read(cx).settings().syncable.theme_mode.clone();
-                if let Some(mode) = AppearanceMode::from_config_str(&theme_str) {
+                let syncable = store.read(cx).settings().syncable.clone();
+                if let Some(mode) = AppearanceMode::from_config_str(&syncable.theme_mode) {
                     let system_dark = matches!(
                         cx.window_appearance(),
                         WindowAppearance::Dark | WindowAppearance::VibrantDark
@@ -132,6 +142,10 @@ impl AppShell {
                         cx,
                     );
                 }
+                crate::i18n::apply_locale(&syncable.locale);
+                this.active_view.notify(cx);
+                this.sheet_host.update(cx, |_, cx| cx.notify());
+                this.confirm_host.update(cx, |_, cx| cx.notify());
                 cx.notify();
             }
             DomainKind::Proxies | DomainKind::Profiles => {}
@@ -319,10 +333,13 @@ impl AppShell {
             )
             .child(MiniSparkline::new(points).height(px(40.0)))
             .child(
-                div()
-                    .text_xs()
-                    .text_color(tokens.on_surface_variant)
-                    .child(format!("RAM {}", format_bytes(telemetry.memory_bytes))),
+                div().text_xs().text_color(tokens.on_surface_variant).child(
+                    rust_i18n::t!(
+                        "shell.telemetry.ram",
+                        value = format_bytes(telemetry.memory_bytes)
+                    )
+                    .into_owned(),
+                ),
             )
             .into_any_element()
     }
@@ -339,9 +356,9 @@ impl Render for AppShell {
         let collapse_btn = IconButton::new(
             "verve-sidebar-toggle",
             if self.sidebar_collapsed {
-                "Expand navigation"
+                rust_i18n::t!("shell.expand_nav").into_owned()
             } else {
-                "Collapse navigation"
+                rust_i18n::t!("shell.collapse_nav").into_owned()
             },
             Icon::new(if self.sidebar_collapsed {
                 IconName::LeftPanelOpen
@@ -358,9 +375,9 @@ impl Render for AppShell {
         let theme_btn = IconButton::new(
             "verve-theme-toggle",
             if is_dark {
-                "Switch to Light theme"
+                rust_i18n::t!("shell.switch_to_light").into_owned()
             } else {
-                "Switch to Dark theme"
+                rust_i18n::t!("shell.switch_to_dark").into_owned()
             },
             Icon::new(if is_dark {
                 IconName::LightMode
@@ -388,14 +405,17 @@ impl Render for AppShell {
         let (health_state, health_label) = if runtime.kernel_running {
             (
                 KernelHealthState::Running,
-                format!("Running :{}", runtime.mixed_port),
+                rust_i18n::t!("shell.health.running", port = runtime.mixed_port).into_owned(),
             )
         } else if runtime.last_error.is_some() {
-            (KernelHealthState::Fault, "Fault".to_owned())
+            (
+                KernelHealthState::Fault,
+                rust_i18n::t!("shell.health.fault").into_owned(),
+            )
         } else {
             (
                 KernelHealthState::Stopped,
-                format!("Idle :{}", runtime.mixed_port),
+                rust_i18n::t!("shell.health.stopped").into_owned(),
             )
         };
 
@@ -417,7 +437,8 @@ impl Render for AppShell {
         let nav_items_vec: Vec<NavigationItem> = route_registry()
             .iter()
             .map(|desc| {
-                let mut item = NavigationItem::new(desc.id, desc.label).icon(desc.route.icon());
+                let mut item = NavigationItem::new(desc.id, desc.route.localized_label())
+                    .icon(desc.route.icon());
                 if desc.route == RouteId::Activity && conn_count > 0 {
                     item = item.badge(Badge::standalone_count(conn_count, 99));
                 }
@@ -426,16 +447,19 @@ impl Render for AppShell {
             .collect();
 
         let nav_entity = cx.weak_entity();
-        let nav_items =
-            NavigationItems::new("verve-primary-nav", "Primary Navigation", nav_items_vec)
-                .selected(self.active_route.id_str())
-                .on_select(move |id, window, cx| {
-                    if let Some(route) = RouteId::from_id_str(id.as_ref()) {
-                        let _ = nav_entity.update(cx, |shell, cx| {
-                            shell.navigate(route, window, cx);
-                        });
-                    }
+        let nav_items = NavigationItems::new(
+            "verve-primary-nav",
+            rust_i18n::t!("shell.primary_nav").into_owned(),
+            nav_items_vec,
+        )
+        .selected(self.active_route.id_str())
+        .on_select(move |id, window, cx| {
+            if let Some(route) = RouteId::from_id_str(id.as_ref()) {
+                let _ = nav_entity.update(cx, |shell, cx| {
+                    shell.navigate(route, window, cx);
                 });
+            }
+        });
 
         let sidebar = if self.sidebar_collapsed {
             div()

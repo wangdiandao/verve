@@ -95,6 +95,13 @@ pub enum AppCommand {
         /// Optional reply channel receiving completion status.
         reply: Option<oneshot::Sender<Result<(), CoreError>>>,
     },
+    /// Validates and persists UI `locale` (`"zh-CN"` or `"en-US"`) in `settings.toml`.
+    SetLocale {
+        /// Target locale tag string.
+        locale: String,
+        /// Optional reply channel receiving completion status.
+        reply: Option<oneshot::Sender<Result<(), CoreError>>>,
+    },
     /// Fetches active routing rules and external rule providers into `ActivitySlice`.
     RefreshRules {
         /// Optional reply channel receiving [`RuleSnapshot`].
@@ -242,6 +249,15 @@ impl CommandBus {
     pub async fn set_theme_mode(&self, mode: impl Into<String>) -> Result<(), CoreError> {
         self.call(|reply| AppCommand::SetThemeMode {
             mode: mode.into(),
+            reply: Some(reply),
+        })
+        .await
+    }
+
+    /// Validates and persists `syncable.locale` (`"zh-CN"` or `"en-US"`).
+    pub async fn set_locale(&self, locale: impl Into<String>) -> Result<(), CoreError> {
+        self.call(|reply| AppCommand::SetLocale {
+            locale: locale.into(),
             reply: Some(reply),
         })
         .await

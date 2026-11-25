@@ -237,6 +237,28 @@ async fn tun_and_theme_commands_persist_compile_and_validate() {
         .expect_err("invalid theme mode must fail");
     assert!(matches!(err, CoreError::Config(_)));
 
+    assert_eq!(handle.snapshot().settings.syncable.locale, "zh-CN");
+    handle
+        .bus()
+        .set_locale("en_us")
+        .await
+        .expect("set en-US locale");
+    assert_eq!(handle.snapshot().settings.syncable.locale, "en-US");
+
+    handle
+        .bus()
+        .set_locale("zh")
+        .await
+        .expect("set zh-CN locale");
+    assert_eq!(handle.snapshot().settings.syncable.locale, "zh-CN");
+
+    let locale_err = handle
+        .bus()
+        .set_locale("fr-FR")
+        .await
+        .expect_err("unsupported locale must fail");
+    assert!(matches!(locale_err, CoreError::Config(_)));
+
     handle.shutdown().await.expect("shutdown");
 }
 

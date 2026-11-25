@@ -55,11 +55,14 @@ impl Render for SettingsView {
         let theme_commands = self.commands.clone();
         let appearance_selector = ButtonGroup::connected(
             "settings-theme-mode",
-            "Theme mode",
+            rust_i18n::t!("settings.theme_mode_label").into_owned(),
             [
-                ButtonGroupItem::new("light", "Light"),
-                ButtonGroupItem::new("dark", "Dark"),
-                ButtonGroupItem::new("system", "System"),
+                ButtonGroupItem::new("light", rust_i18n::t!("settings.theme.light").into_owned()),
+                ButtonGroupItem::new("dark", rust_i18n::t!("settings.theme.dark").into_owned()),
+                ButtonGroupItem::new(
+                    "system",
+                    rust_i18n::t!("settings.theme.system").into_owned(),
+                ),
             ],
         )
         .selection(
@@ -82,8 +85,36 @@ impl Render for SettingsView {
             }
         });
 
+        let current_locale =
+            crate::i18n::AppLocale::from_config_str(&syncable.locale).unwrap_or_default();
+        let locale_commands = self.commands.clone();
+        let locale_selector = ButtonGroup::connected(
+            "settings-locale",
+            rust_i18n::t!("settings.language_label").into_owned(),
+            [
+                ButtonGroupItem::new("zh-CN", rust_i18n::t!("settings.locale.zh_cn").into_owned()),
+                ButtonGroupItem::new("en-US", rust_i18n::t!("settings.locale.en_us").into_owned()),
+            ],
+        )
+        .selection(
+            ButtonGroupSelection::SingleRequired,
+            [current_locale.as_config_str().into()],
+        )
+        .on_change(move |selected, _, cx| {
+            if let Some(first) = selected.first()
+                && let Some(locale) = crate::i18n::AppLocale::from_config_str(first.as_ref())
+            {
+                let tag = locale.as_config_str();
+                crate::i18n::apply_locale(tag);
+                locale_commands.set_locale(tag);
+                cx.refresh_windows();
+            }
+        });
+
+        let enabled_label = rust_i18n::t!("common.enabled").into_owned();
+        let disabled_label = rust_i18n::t!("common.disabled").into_owned();
         let bypass_summary = if syncable.system_proxy_bypass.is_empty() {
-            "Default bypass rules".to_owned()
+            rust_i18n::t!("settings.network.default_bypass").into_owned()
         } else {
             syncable.system_proxy_bypass.join(", ")
         };
@@ -102,18 +133,45 @@ impl Render for SettingsView {
                     .text_xl()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(tokens.on_surface)
-                    .child("Settings"),
+                    .child(rust_i18n::t!("settings.title").into_owned()),
             )
             .child(
                 SectionCard::new()
-                    .title("Appearance")
-                    .subtitle("Material 3 dynamic color palette and theme mode")
-                    .child(appearance_selector),
+                    .title(rust_i18n::t!("settings.appearance.title").into_owned())
+                    .subtitle(rust_i18n::t!("settings.appearance.subtitle").into_owned())
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(6.0))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(tokens.on_surface_variant)
+                                    .child(rust_i18n::t!("settings.theme_mode_label").into_owned()),
+                            )
+                            .child(appearance_selector),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(6.0))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(tokens.on_surface_variant)
+                                    .child(rust_i18n::t!("settings.language_label").into_owned()),
+                            )
+                            .child(locale_selector),
+                    ),
             )
             .child(
                 SectionCard::new()
-                    .title("Network & Inbound")
-                    .subtitle("Persisted syncable network preferences (settings.toml)")
+                    .title(rust_i18n::t!("settings.network.title").into_owned())
+                    .subtitle(rust_i18n::t!("settings.network.subtitle").into_owned())
                     .child(
                         div()
                             .flex()
@@ -121,29 +179,39 @@ impl Render for SettingsView {
                             .flex_wrap()
                             .gap(px(12.0))
                             .child(MetricTile::new(
-                                "Mixed Port",
+                                rust_i18n::t!("common.mixed_port").into_owned(),
                                 syncable.mixed_port.to_string(),
                             ))
                             .child(MetricTile::new(
-                                "Allow LAN",
+                                rust_i18n::t!("settings.network.allow_lan").into_owned(),
                                 if syncable.allow_lan {
-                                    "Enabled"
+                                    enabled_label.clone()
                                 } else {
-                                    "Disabled"
+                                    disabled_label.clone()
                                 },
                             ))
                             .child(MetricTile::new(
-                                "IPv6",
-                                if syncable.ipv6 { "Enabled" } else { "Disabled" },
+                                rust_i18n::t!("settings.network.ipv6").into_owned(),
+                                if syncable.ipv6 {
+                                    enabled_label.clone()
+                                } else {
+                                    disabled_label.clone()
+                                },
                             ))
-                            .child(MetricTile::new("Log Level", syncable.log_level.clone())),
+                            .child(MetricTile::new(
+                                rust_i18n::t!("settings.network.log_level").into_owned(),
+                                syncable.log_level.clone(),
+                            )),
                     )
-                    .child(MetricTile::new("System Proxy Bypass", bypass_summary)),
+                    .child(MetricTile::new(
+                        rust_i18n::t!("settings.network.bypass").into_owned(),
+                        bypass_summary,
+                    )),
             )
             .child(
                 SectionCard::new()
-                    .title("Machine & Service")
-                    .subtitle("Local machine settings (local.toml)")
+                    .title(rust_i18n::t!("settings.machine.title").into_owned())
+                    .subtitle(rust_i18n::t!("settings.machine.subtitle").into_owned())
                     .child(
                         div()
                             .flex()
@@ -151,26 +219,25 @@ impl Render for SettingsView {
                             .flex_wrap()
                             .gap(px(12.0))
                             .child(MetricTile::new(
-                                "Service Mode",
+                                rust_i18n::t!("settings.machine.service_mode").into_owned(),
                                 if local.service_mode_enabled {
-                                    "Enabled"
+                                    enabled_label.clone()
                                 } else {
-                                    "Disabled (Direct)"
+                                    rust_i18n::t!("settings.machine.service_disabled").into_owned()
                                 },
                             ))
                             .child(MetricTile::new(
-                                "TUN Interface",
-                                local
-                                    .tun_interface_name
-                                    .clone()
-                                    .unwrap_or_else(|| "Auto".into()),
+                                rust_i18n::t!("settings.machine.tun_interface").into_owned(),
+                                local.tun_interface_name.clone().unwrap_or_else(|| {
+                                    rust_i18n::t!("settings.machine.tun_auto").into_owned()
+                                }),
                             ))
                             .child(MetricTile::new(
-                                "Auto Launch",
+                                rust_i18n::t!("settings.machine.auto_launch").into_owned(),
                                 if local.auto_launch {
-                                    "Enabled"
+                                    enabled_label
                                 } else {
-                                    "Disabled"
+                                    disabled_label
                                 },
                             )),
                     ),

@@ -47,7 +47,7 @@ impl ActivityView {
     ) -> Self {
         let initial_lease = Some(store.read(cx).acquire_telemetry(TelemetryKind::Connections));
         let store_sub = cx.subscribe(&store, |_, _, ev: &DomainChanged, cx| {
-            if ev.0 == DomainKind::Activity {
+            if matches!(ev.0, DomainKind::Activity | DomainKind::Settings) {
                 cx.notify();
             }
         });
@@ -100,11 +100,14 @@ impl Render for ActivityView {
         let view = cx.weak_entity();
         let switcher = ButtonGroup::connected(
             "activity-tabs",
-            "Activity views",
+            rust_i18n::t!("activity.tabs_label").into_owned(),
             [
-                ButtonGroupItem::new("connections", "Connections"),
-                ButtonGroupItem::new("rules", "Rules"),
-                ButtonGroupItem::new("logs", "Logs"),
+                ButtonGroupItem::new(
+                    "connections",
+                    rust_i18n::t!("activity.tab.connections").into_owned(),
+                ),
+                ButtonGroupItem::new("rules", rust_i18n::t!("activity.tab.rules").into_owned()),
+                ButtonGroupItem::new("logs", rust_i18n::t!("activity.tab.logs").into_owned()),
             ],
         )
         .selection(
@@ -134,17 +137,20 @@ impl Render for ActivityView {
                     .text_xl()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(tokens.on_surface)
-                    .child("Activity"),
+                    .child(rust_i18n::t!("activity.title").into_owned()),
             )
             .child(switcher);
 
         if self.active_tab == ActivityTab::Rules {
             let cmd = self.commands.clone();
             header = header.child(
-                Button::new("activity-refresh-rules", "Refresh Rules")
-                    .variant(ButtonVariant::Outlined)
-                    .disabled(!kernel_running)
-                    .on_activate(move |_, _| cmd.refresh_rules()),
+                Button::new(
+                    "activity-refresh-rules",
+                    rust_i18n::t!("activity.refresh_rules").into_owned(),
+                )
+                .variant(ButtonVariant::Outlined)
+                .disabled(!kernel_running)
+                .on_activate(move |_, _| cmd.refresh_rules()),
             );
         }
 
@@ -152,18 +158,20 @@ impl Render for ActivityView {
             ActivityTab::Connections => {
                 if activity.connections.is_empty() {
                     EmptyState::new(
-                        "No active connections",
-                        "Live connections tracked by the running kernel appear here while this tab is open.",
+                        rust_i18n::t!("activity.connections.empty_title").into_owned(),
+                        rust_i18n::t!("activity.connections.empty_desc").into_owned(),
                     )
                     .into_any_element()
                 } else {
-                    let mut card =
-                        SectionCard::new()
-                            .title("Active Connections")
-                            .subtitle(format!(
-                                "{} tracked connection(s)",
-                                activity.connections.len()
-                            ));
+                    let mut card = SectionCard::new()
+                        .title(rust_i18n::t!("activity.connections.card_title").into_owned())
+                        .subtitle(
+                            rust_i18n::t!(
+                                "activity.connections.card_subtitle",
+                                count = activity.connections.len()
+                            )
+                            .into_owned(),
+                        );
                     for conn in activity.connections.iter().take(100) {
                         let chain = conn.chains.join(" -> ");
                         let traffic = format!(
@@ -220,16 +228,21 @@ impl Render for ActivityView {
             ActivityTab::Rules => {
                 if activity.rules.is_empty() {
                     EmptyState::new(
-                        "No rules loaded",
-                        "Start the kernel and refresh rules to inspect active routing rules.",
+                        rust_i18n::t!("activity.rules.empty_title").into_owned(),
+                        rust_i18n::t!("activity.rules.empty_desc").into_owned(),
                     )
                     .into_any_element()
                 } else {
-                    let mut card = SectionCard::new().title("Routing Rules").subtitle(format!(
-                        "{} rule(s) · {} provider(s)",
-                        activity.rules.len(),
-                        activity.rule_providers.len()
-                    ));
+                    let mut card = SectionCard::new()
+                        .title(rust_i18n::t!("activity.rules.card_title").into_owned())
+                        .subtitle(
+                            rust_i18n::t!(
+                                "activity.rules.card_subtitle",
+                                rules = activity.rules.len(),
+                                providers = activity.rule_providers.len()
+                            )
+                            .into_owned(),
+                        );
                     for rule in activity.rules.iter().take(200) {
                         card = card.child(
                             div()
@@ -263,14 +276,20 @@ impl Render for ActivityView {
             ActivityTab::Logs => {
                 if activity.logs.is_empty() {
                     EmptyState::new(
-                        "No kernel logs yet",
-                        "Structured logs stream here on demand while the Logs tab is selected.",
+                        rust_i18n::t!("activity.logs.empty_title").into_owned(),
+                        rust_i18n::t!("activity.logs.empty_desc").into_owned(),
                     )
                     .into_any_element()
                 } else {
                     let mut card = SectionCard::new()
-                        .title("Kernel Logs")
-                        .subtitle(format!("{} buffered line(s)", activity.logs.len()));
+                        .title(rust_i18n::t!("activity.logs.card_title").into_owned())
+                        .subtitle(
+                            rust_i18n::t!(
+                                "activity.logs.card_subtitle",
+                                count = activity.logs.len()
+                            )
+                            .into_owned(),
+                        );
                     for entry in activity.logs.iter().rev().take(200) {
                         card = card.child(
                             div()

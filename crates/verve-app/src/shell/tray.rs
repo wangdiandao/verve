@@ -7,7 +7,7 @@ use gpui_base::Root;
 use tokio::sync::mpsc;
 use verve_core::DomainKind;
 use verve_core::kernel::ProxyMode;
-use verve_core::sys::{TrayAction, TrayBackend, TrayMenuState};
+use verve_core::sys::{TrayAction, TrayBackend, TrayMenuLabels, TrayMenuState};
 
 use crate::bridge::{CommandDispatcher, DomainChanged, UiStore};
 
@@ -44,16 +44,25 @@ impl TrayController {
         on_quit: Option<QuitCallback>,
         cx: &mut Context<Self>,
     ) -> Self {
-        let initial_runtime = store.read(cx).runtime().clone();
+        let (initial_runtime, initial_locale) = {
+            let store_ref = store.read(cx);
+            (
+                store_ref.runtime().clone(),
+                store_ref.settings().syncable.locale.clone(),
+            )
+        };
+        crate::i18n::apply_locale(&initial_locale);
+
         let initial_state = TrayMenuState {
             window_visible: false,
             proxy_mode: proxy_mode_str(initial_runtime.proxy_mode).to_owned(),
             system_proxy_enabled: initial_runtime.system_proxy_enabled,
             tun_enabled: initial_runtime.tun_enabled,
+            labels: tray_labels_for_locale(&initial_locale),
         };
 
         let store_sub = cx.subscribe(&store, |this, _store, ev: &DomainChanged, cx| {
-            if ev.0 == DomainKind::Runtime {
+            if matches!(ev.0, DomainKind::Runtime | DomainKind::Settings) {
                 this.sync_from_store(cx);
             }
         });
@@ -210,10 +219,19 @@ impl TrayController {
     }
 
     fn sync_from_store(&mut self, cx: &mut Context<Self>) {
-        let runtime = self.store.read(cx).runtime().clone();
+        let (runtime, locale) = {
+            let store_ref = self.store.read(cx);
+            (
+                store_ref.runtime().clone(),
+                store_ref.settings().syncable.locale.clone(),
+            )
+        };
+
+        crate::i18n::apply_locale(&locale);
         self.state.proxy_mode = proxy_mode_str(runtime.proxy_mode).to_owned();
         self.state.system_proxy_enabled = runtime.system_proxy_enabled;
         self.state.tun_enabled = runtime.tun_enabled;
+        self.state.labels = tray_labels_for_locale(&locale);
         self.push_tray_state();
         cx.notify();
     }
@@ -222,6 +240,22 @@ impl TrayController {
         if let Err(err) = self.backend.update_state(&self.state) {
             tracing::warn!(error = %err, "failed to update tray state");
         }
+    }
+}
+
+fn tray_labels_for_locale(locale: &str) -> TrayMenuLabels {
+    let resolved = crate::i18n::AppLocale::from_config_str(locale)
+        .unwrap_or_default()
+        .as_config_str();
+    TrayMenuLabels {
+        show_window: rust_i18n::t!("tray.show_window", locale = resolved).into_owned(),
+        hide_window: rust_i18n::t!("tray.hide_window", locale = resolved).into_owned(),
+        mode_rule: rust_i18n::t!("tray.mode_rule", locale = resolved).into_owned(),
+        mode_global: rust_i18n::t!("tray.mode_global", locale = resolved).into_owned(),
+        mode_direct: rust_i18n::t!("tray.mode_direct", locale = resolved).into_owned(),
+        system_proxy: rust_i18n::t!("tray.system_proxy", locale = resolved).into_owned(),
+        tun_mode: rust_i18n::t!("tray.tun_mode", locale = resolved).into_owned(),
+        quit: rust_i18n::t!("tray.quit", locale = resolved).into_owned(),
     }
 }
 
