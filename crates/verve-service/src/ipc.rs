@@ -348,12 +348,12 @@ mod tests {
     use crate::allowlist::SecurityPolicy;
 
     fn unique_test_endpoint(name: &str) -> (Option<TempDir>, String) {
-        let nanos = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
         #[cfg(windows)]
         {
+            let nanos = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
             (
                 None,
                 format!(
