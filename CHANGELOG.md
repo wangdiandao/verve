@@ -16,6 +16,7 @@ See [versioning and releases](docs/release.md) for the version progression polic
 
 ### UI & UX
 
+- Replaced raw click containers for the Settings left category rail and dynamic accent seed color swatches with accessible Material 3 `NavigationRail` / `NavigationItems` and `ChipGroup` controls so all Settings navigation and theme preset controls support keyboard focus and native OS accessibility trees.
 - Added UTC date/datetime formatters (`format_unix_date`, `format_unix_datetime`), 7 Material 3 Expressive `SEED_COLOR_PRESETS`, and hex seed color parsing/formatting helpers to `verve-ui-kit`.
 - Wired `CommandDispatcher` async wrappers for all new P0 commands, dual error/info `ToastNotification` snackbar routing, dynamic `theme_seed_color` application, `ProtocolServiceIpcClient` bootstrap wiring, and shared `common.*` bilingual locale keys in `verve-app`.
 - Refined the `AppShell` navigation chrome: removed the redundant `NavigationRail` headline text, switched collapsed rail destinations to icon-only mode with larger 24dp icons, and removed the theme toggle button from the `TitleBar` (theme switching remains in `Settings`).

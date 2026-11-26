@@ -13,8 +13,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use gpui::{
-    AppContext, Bounds, Entity, IntoElement, ParentElement, Render, Styled, TestAppContext, Window,
-    WindowBounds, WindowOptions, div, px, size,
+    AppContext, Bounds, ElementId, Entity, InputEvent, IntoElement, Modifiers, MouseButton,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Render, Role, SharedString,
+    Styled, TestAppContext, Window, WindowBounds, WindowOptions, div, px, size,
 };
 use gpui_material::MaterialRoot;
 use verve_app::features::settings::{SettingsCategory, SettingsView};
@@ -221,6 +222,45 @@ fn window_options_with_size(width: f32, height: f32, cx: &gpui::App) -> WindowOp
         ))),
         ..Default::default()
     }
+}
+
+fn click_observed_element(window: &mut Window, id: impl Into<ElementId>, cx: &mut gpui::App) {
+    let target_id = id.into();
+    let snapshot = gpui_base::test_support::find(window, &[], &target_id).unwrap_or_else(|| {
+        let paths = gpui_base::test_support::registered_paths(window);
+        panic!("expected observed element `{target_id:?}` in window; registered paths:\n{paths}");
+    });
+    let position = snapshot.bounds().center();
+    window.dispatch_event(
+        MouseMoveEvent {
+            position,
+            pressed_button: None,
+            modifiers: Modifiers::none(),
+        }
+        .to_platform_input(),
+        cx,
+    );
+    window.dispatch_event(
+        MouseDownEvent {
+            button: MouseButton::Left,
+            position,
+            modifiers: Modifiers::none(),
+            click_count: 1,
+            first_mouse: false,
+        }
+        .to_platform_input(),
+        cx,
+    );
+    window.dispatch_event(
+        MouseUpEvent {
+            button: MouseButton::Left,
+            position,
+            modifiers: Modifiers::none(),
+            click_count: 1,
+        }
+        .to_platform_input(),
+        cx,
+    );
 }
 
 #[gpui::test]
@@ -688,4 +728,206 @@ fn settings_dispatches_network_tun_service_and_dynamic_seed_commands(cx: &mut Te
     assert!(reloaded_local.service_mode_enabled);
     assert!(reloaded_local.auto_launch);
     assert_eq!(reloaded_local.tun_interface_name, None);
+}
+
+#[gpui::test]
+fn settings_exposes_accessible_category_nav_and_seed_swatches(cx: &mut TestAppContext) {
+    let _locale_guard = LOCALE_TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    verve_app::i18n::apply_locale("zh-CN");
+    cx.background_executor.allow_parking();
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("tokio runtime");
+
+    let cfg_mgr = ConfigManager::open(dir.path()).expect("config manager");
+    let mut handle = rt.block_on(async {
+        AppCoordinator::spawn(
+            cfg_mgr,
+            CompilerPipeline::default(),
+            KernelSupervisor::Direct(DirectProcessSupervisor::new()),
+            Arc::new(NoopKernel),
+            CoordinatorConfig {
+                control_endpoint: ControlEndpoint::default_for_session("settings-a11y"),
+                ..Default::default()
+            },
+        )
+        .expect("spawn coordinator")
+    });
+
+    cx.update(|cx| {
+        let light = build_material_theme(AppearanceMode::Light, Some(DEFAULT_SEED_ARGB), false);
+        init_ui_kit(light, cx);
+        cx.set_reduce_motion(true);
+    });
+
+    let snapshots = Arc::clone(handle.snapshots());
+    let telemetry_source: Arc<dyn TelemetrySource> = Arc::new(handle.telemetry().clone());
+    let commands = CommandDispatcher::new(handle.bus().clone(), rt.handle().clone());
+    let store = cx.update(|cx| {
+        cx.new(|cx| UiStore::new(snapshots, telemetry_source, rt.handle().clone(), cx))
+    });
+
+    let view_cap: Rc<RefCell<Option<Entity<SettingsView>>>> = Rc::new(RefCell::new(None));
+    let view_cap_c = Rc::clone(&view_cap);
+    let store_c = store.clone();
+    let cmds_c = commands.clone();
+
+    let window = cx
+        .update(|cx| {
+            let opts = window_options_with_size(1080.0, 720.0, cx);
+            MaterialRoot::open_window(opts, cx, move |window, cx| {
+                let shell = cx.new(|cx| AppShell::new(store_c.clone(), cmds_c.clone(), window, cx));
+                let shell_handle = shell.read(cx).shell_handle().clone();
+                let sheet_host = shell.read(cx).sheet_host().clone();
+                let confirm_host = shell.read(cx).confirm_host().clone();
+                let settings = cx
+                    .new(|cx| SettingsView::new(store_c.clone(), cmds_c.clone(), shell_handle, cx));
+                *view_cap_c.borrow_mut() = Some(settings.clone());
+                cx.new(|_| SettingsTestHost {
+                    settings,
+                    sheet_host,
+                    confirm_host,
+                })
+            })
+        })
+        .expect("open settings a11y window");
+
+    let settings_view = view_cap.borrow().clone().expect("settings view");
+
+    let nav_list_id = ElementId::from("settings-category-nav");
+    let network_opt_id = ElementId::from((nav_list_id.clone(), SharedString::from("network")));
+    let general_opt_id = ElementId::from((nav_list_id.clone(), SharedString::from("general")));
+
+    // 1. Wide category rail exposes ListBox + ListBoxOption controls with localized names and selection.
+    cx.update_window(window.into(), |_, window, cx| {
+        let _ = window.draw(cx);
+        let list = gpui_base::test_support::find(window, &[], &nav_list_id)
+            .expect("settings-category-nav listbox must be observable");
+        assert_eq!(list.role(), Some(Role::ListBox));
+        assert_eq!(list.label(), Some("设置分类"));
+
+        let network_opt = gpui_base::test_support::find(window, &[], &network_opt_id)
+            .expect("network category option must be observable");
+        assert_eq!(network_opt.role(), Some(Role::ListBoxOption));
+        assert_eq!(network_opt.label(), Some("网络与接管"));
+        assert_eq!(network_opt.selected(), Some(true));
+
+        let general_opt = gpui_base::test_support::find(window, &[], &general_opt_id)
+            .expect("general category option must be observable");
+        assert_eq!(general_opt.role(), Some(Role::ListBoxOption));
+        assert_eq!(general_opt.label(), Some("常规与外观"));
+        assert_eq!(general_opt.selected(), Some(false));
+
+        // Clicking the accessible General option switches the active category.
+        click_observed_element(window, general_opt_id.clone(), cx);
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+
+    assert_eq!(
+        cx.read(|cx| settings_view.read(cx).active_category()),
+        SettingsCategory::General
+    );
+
+    // 2. General category exposes ChipGroup + 7 accessible toggle swatches with localized labels & checked state.
+    let swatch_group_id = ElementId::from("settings-seed-swatches");
+    let initial_primary = cx.read(|cx| theme_tokens(cx).primary);
+    let ocean_blue = SEED_COLOR_PRESETS
+        .iter()
+        .find(|p| p.id == "ocean_blue")
+        .expect("ocean_blue preset");
+
+    cx.update_window(window.into(), |_, window, cx| {
+        let _ = window.draw(cx);
+
+        let general_opt = gpui_base::test_support::find(window, &[], &general_opt_id)
+            .expect("general category option must remain observable");
+        assert_eq!(general_opt.selected(), Some(true));
+
+        let group = gpui_base::test_support::find(window, &[], &swatch_group_id)
+            .expect("settings-seed-swatches group must be observable");
+        assert_eq!(group.role(), Some(Role::Group));
+        assert_eq!(group.label(), Some("动态主题色"));
+
+        let expected_zh = [
+            ("deep_teal", "深青", true),
+            ("ocean_blue", "海蓝", false),
+            ("indigo", "靛蓝", false),
+            ("forest_green", "森绿", false),
+            ("terracotta", "陶红", false),
+            ("plum", "梅紫", false),
+            ("amber", "琥珀", false),
+        ];
+
+        for (preset_id, expected_label, expected_checked) in expected_zh {
+            let chip_id = ElementId::from((swatch_group_id.clone(), SharedString::from(preset_id)));
+            let activate_id = ElementId::from((chip_id, "activate"));
+            let swatch = gpui_base::test_support::find(window, &[], &activate_id)
+                .unwrap_or_else(|| panic!("seed swatch `{preset_id}` must be observable"));
+            assert_eq!(swatch.label(), Some(expected_label));
+            assert_eq!(swatch.checked(), Some(expected_checked));
+        }
+
+        // Click the Ocean Blue swatch chip and verify live selection update.
+        let ocean_activate_id = ElementId::from((
+            ElementId::from((swatch_group_id.clone(), SharedString::from("ocean_blue"))),
+            "activate",
+        ));
+        click_observed_element(window, ocean_activate_id, cx);
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+
+    assert_ne!(initial_primary, cx.read(|cx| theme_tokens(cx).primary));
+    wait_until(
+        cx,
+        Duration::from_secs(2),
+        "ocean_blue seed color persisted via swatch chip click",
+        |cx| {
+            cx.read(|cx| {
+                store.read(cx).settings().syncable.theme_seed_color == Some(ocean_blue.argb)
+            })
+        },
+    );
+
+    // 3. Switch to en-US and verify localized English accessible labels & updated checked state.
+    verve_app::i18n::apply_locale("en-US");
+    cx.update_window(window.into(), |_, window, cx| {
+        let _ = window.draw(cx);
+        let general_opt = gpui_base::test_support::find(window, &[], &general_opt_id)
+            .expect("general option in en-US");
+        assert_eq!(general_opt.label(), Some("General & Appearance"));
+
+        let ocean_activate_id = ElementId::from((
+            ElementId::from((swatch_group_id.clone(), SharedString::from("ocean_blue"))),
+            "activate",
+        ));
+        let ocean_swatch = gpui_base::test_support::find(window, &[], &ocean_activate_id)
+            .expect("ocean_blue swatch in en-US");
+        assert_eq!(ocean_swatch.label(), Some("Ocean Blue"));
+        assert_eq!(ocean_swatch.checked(), Some(true));
+
+        let deep_teal_activate_id = ElementId::from((
+            ElementId::from((swatch_group_id.clone(), SharedString::from("deep_teal"))),
+            "activate",
+        ));
+        let deep_teal_swatch = gpui_base::test_support::find(window, &[], &deep_teal_activate_id)
+            .expect("deep_teal swatch in en-US");
+        assert_eq!(deep_teal_swatch.label(), Some("Deep Teal"));
+        assert_eq!(deep_teal_swatch.checked(), Some(false));
+    })
+    .unwrap();
+
+    cx.update_window(window.into(), |_, window, _| {
+        window.remove_window();
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    rt.block_on(async {
+        handle.shutdown().await.unwrap();
+    });
 }
