@@ -67,6 +67,7 @@ overview:
   pid: "PID %{pid}"
   start_kernel: "Start Kernel"
   stop_kernel: "Stop Kernel"
+  restart_kernel: "Restart"
   network_card:
     title: "Network & Mode"
     subtitle: "Routing strategy, OS proxy takeover, and kernel lifecycle"
@@ -76,17 +77,38 @@ overview:
   tun:
     title: "TUN Mode"
     supporting_service: "Privileged service mode enabled for TUN capture"
+    supporting_service_available: "Privileged service connected for elevated TUN capture"
+    supporting_service_unavailable: "Service mode enabled, but verve-service is unreachable"
     supporting_direct: "Direct unprivileged mode (enable service mode in local config for elevated TUN)"
+  terminal_proxy:
+    title: "Terminal Proxy Command"
+    copy: "Copy"
+    copied: "Copied %{shell} proxy command to clipboard"
   profile_card:
-    title: "Active Profile"
+    title: "Active Profile & Outbound"
+    selector_label: "Active Profile"
+    select_placeholder: "Select a profile"
+    select_hint: "Choose a profile above to compile and activate it."
+    refresh_tooltip: "Refresh subscription"
     no_quota: "No remote quota recorded"
     usage: "Down %{down} · Up %{up}"
+    quota_used_total: "%{used} / %{total} (%{percent}%)"
+    quota_progress_label: "Subscription traffic quota"
+    expires_on: "Expires %{date}"
     manage: "Manage"
     metric_profile: "Profile"
     metric_count: "Registered Profiles"
     empty_title: "No active profile"
     empty_desc: "Select or import a profile to compile runtime configuration."
     open_profiles: "Open Profiles"
+  outbound:
+    title: "Primary Outbound"
+    all_proxies: "All Proxies"
+    selector_label: "Outbound Node"
+    probe_tooltip: "Test latency for %{node}"
+    direct_mode: "Direct mode is active; traffic bypasses proxy selectors."
+    empty_running: "No proxy groups loaded from kernel yet."
+    empty_stopped: "Start the kernel to switch outbound nodes."
   traffic_card:
     title: "Live Traffic"
     subtitle: "Real-time kernel throughput and memory telemetry"
@@ -98,6 +120,15 @@ overview:
     total_down: "Total Down"
     total_up: "Total Up"
     memory: "Kernel Memory"
+  status_bar:
+    kernel: "Kernel"
+    uptime: "Uptime"
+    service: "Service"
+    service_active: "Service Active"
+    service_unavailable: "Service Unavailable"
+    service_probing: "Service Mode"
+    service_direct_ready: "Direct (Service Ready)"
+    service_direct: "Direct Mode"
 
 proxies:
   title: "Proxies"

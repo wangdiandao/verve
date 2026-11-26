@@ -67,6 +67,7 @@ overview:
   pid: "PID %{pid}"
   start_kernel: "启动内核"
   stop_kernel: "停止内核"
+  restart_kernel: "重启内核"
   network_card:
     title: "网络接管与模式"
     subtitle: "路由策略、系统代理接管与内核生命周期"
@@ -76,17 +77,38 @@ overview:
   tun:
     title: "TUN 模式"
     supporting_service: "已启用特权服务模式以接管 TUN 流量"
+    supporting_service_available: "特权服务已连接，可接管系统 TUN 流量"
+    supporting_service_unavailable: "已开启服务模式，但特权服务当前不可用"
     supporting_direct: "无特权直连模式（可在本地配置中开启服务模式以使用 TUN）"
+  terminal_proxy:
+    title: "终端代理命令"
+    copy: "复制"
+    copied: "已复制 %{shell} 代理命令到剪贴板"
   profile_card:
-    title: "当前配置"
+    title: "当前配置与出口"
+    selector_label: "当前配置"
+    select_placeholder: "请选择配置"
+    select_hint: "请从上方选择一个配置进行编译并激活。"
+    refresh_tooltip: "刷新订阅"
     no_quota: "暂无远程订阅流量记录"
     usage: "下行 %{down} · 上行 %{up}"
+    quota_used_total: "已用 %{used} / %{total} (%{percent}%)"
+    quota_progress_label: "订阅流量配额"
+    expires_on: "到期时间 %{date}"
     manage: "管理"
     metric_profile: "配置名称"
     metric_count: "已注册配置"
     empty_title: "尚未激活配置"
     empty_desc: "请选择或导入配置文件以编译运行时配置。"
     open_profiles: "打开配置"
+  outbound:
+    title: "主策略组出口"
+    all_proxies: "全部代理"
+    selector_label: "出口节点"
+    probe_tooltip: "测速 %{node}"
+    direct_mode: "当前处于直连模式，所有流量将绕过代理策略组。"
+    empty_running: "内核尚未加载代理策略组。"
+    empty_stopped: "请先启动内核以切换出口节点。"
   traffic_card:
     title: "实时流量"
     subtitle: "实时内核吞吐速率与内存占用"
@@ -98,6 +120,15 @@ overview:
     total_down: "累计下载"
     total_up: "累计上传"
     memory: "内核内存"
+  status_bar:
+    kernel: "内核"
+    uptime: "运行时长"
+    service: "服务状态"
+    service_active: "服务已连接"
+    service_unavailable: "服务不可用"
+    service_probing: "服务模式"
+    service_direct_ready: "直连（服务就绪）"
+    service_direct: "直连模式"
 
 proxies:
   title: "代理"
