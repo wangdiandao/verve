@@ -37,6 +37,14 @@ pub enum CoreError {
     #[error("mihomo kernel binary could not be located")]
     KernelBinaryNotFound,
 
+    /// Remote subscription fetch, response header, or YAML validation error.
+    #[error("subscription error: {0}")]
+    Subscription(String),
+
+    /// Caller-supplied command parameter failed validation.
+    #[error("invalid input: {0}")]
+    InvalidInput(String),
+
     /// Coordinator command channel or reply channel closed before completing the request.
     #[error("coordinator command channel closed")]
     ChannelClosed,

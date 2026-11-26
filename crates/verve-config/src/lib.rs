@@ -14,7 +14,10 @@ pub use local::LocalMachineConfig;
 pub use manager::ConfigManager;
 pub use schema::CURRENT_SCHEMA_VERSION;
 pub use state::{ProfileUsage, StateStore};
-pub use syncable::{ProfileEntry, ProfileSource, SyncableConfig, normalize_locale};
+pub use syncable::{
+    DEFAULT_DELAY_TEST_URL, ProfileEntry, ProfileSource, SyncableConfig, TunConfig,
+    normalize_locale,
+};
 
 #[cfg(test)]
 mod tests {
@@ -34,6 +37,14 @@ mod tests {
             system_proxy_enabled: true,
             system_proxy_bypass: vec!["localhost".into(), "127.0.0.1/8".into()],
             tun_enabled: true,
+            tun: TunConfig {
+                stack: "GVisor".into(),
+                auto_route: true,
+                strict_route: false,
+                dns_hijack: vec![" any:53 ".into(), "".into()],
+                mtu: 1500,
+                route_exclude_address: vec![" 192.168.0.0/16 ".into(), "   ".into()],
+            },
             active_profile_id: Some("prof-remote".into()),
             profiles: vec![
                 ProfileEntry {
@@ -60,7 +71,9 @@ mod tests {
             global_script_enabled: false,
             quick_rules: vec!["DOMAIN-SUFFIX,example.com,Proxy".into()],
             theme_mode: "Dark".into(),
+            theme_seed_color: Some(0xFF1A_6585),
             locale: "en-US".into(),
+            default_delay_test_url: "  https://cp.cloudflare.com/generate_204  ".into(),
         };
 
         let encoded = syncable
@@ -72,6 +85,14 @@ mod tests {
         assert_eq!(decoded.proxy_mode, "global");
         assert_eq!(decoded.log_level, "warning");
         assert_eq!(decoded.theme_mode, "dark");
+        assert_eq!(decoded.theme_seed_color, Some(0xFF1A_6585));
+        assert_eq!(
+            decoded.default_delay_test_url,
+            "https://cp.cloudflare.com/generate_204"
+        );
+        assert_eq!(decoded.tun.stack, "gvisor");
+        assert_eq!(decoded.tun.dns_hijack, vec!["any:53"]);
+        assert_eq!(decoded.tun.route_exclude_address, vec!["192.168.0.0/16"]);
         assert_eq!(decoded.mixed_port, 17890);
         assert_eq!(decoded.profiles, syncable.profiles);
         assert_eq!(decoded.quick_rules, syncable.quick_rules);
@@ -349,5 +370,108 @@ mod tests {
 
         let store = manager.open_state_store().unwrap();
         assert_eq!(store.journal_mode().unwrap(), "wal");
+    }
+
+    #[test]
+    fn tun_config_validation_and_backwards_compatible_deserialization() {
+        // Older settings.toml omitting `tun`, `theme_seed_color`, and `default_delay_test_url`
+        // must deserialize cleanly using defaults.
+        let legacy_toml = r#"
+            schema_version = 1
+            proxy_mode = "rule"
+            mixed_port = 7897
+            theme_mode = "system"
+            locale = "zh-CN"
+        "#;
+        let legacy = SyncableConfig::from_toml_str(legacy_toml).expect("legacy settings must load");
+        assert_eq!(legacy.tun, TunConfig::safe_defaults());
+        assert_eq!(legacy.theme_seed_color, None);
+        assert_eq!(legacy.default_delay_test_url, DEFAULT_DELAY_TEST_URL);
+
+        // Invalid stack is rejected.
+        let mut bad_stack = TunConfig::safe_defaults();
+        bad_stack.stack = "wireguard".into();
+        assert!(matches!(
+            bad_stack.normalize_and_validate(),
+            Err(ConfigError::InvalidField {
+                field: "tun.stack",
+                ..
+            })
+        ));
+
+        // MTU below 1280 is rejected.
+        let mut bad_mtu = TunConfig::safe_defaults();
+        bad_mtu.mtu = 1279;
+        assert!(matches!(
+            bad_mtu.normalize_and_validate(),
+            Err(ConfigError::InvalidField {
+                field: "tun.mtu",
+                ..
+            })
+        ));
+
+        // mixed_port == 0 is rejected.
+        let bad_port = SyncableConfig {
+            mixed_port: 0,
+            ..Default::default()
+        };
+        assert!(matches!(
+            bad_port.to_toml_string(),
+            Err(ConfigError::InvalidField {
+                field: "mixed_port",
+                ..
+            })
+        ));
+
+        // Empty default_delay_test_url is rejected.
+        let bad_url = SyncableConfig {
+            default_delay_test_url: "   ".into(),
+            ..Default::default()
+        };
+        assert!(matches!(
+            bad_url.to_toml_string(),
+            Err(ConfigError::InvalidField {
+                field: "default_delay_test_url",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn remove_profile_files_deletes_profile_and_overrides_and_ignores_missing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let manager = ConfigManager::open(dir.path()).expect("open manager");
+
+        manager
+            .write_profile_yaml("p1.yaml", "mixed-port: 7897\n")
+            .unwrap();
+        manager
+            .write_override_file("p1.merge.yaml", "allow-lan: true\n")
+            .unwrap();
+        manager
+            .write_override_file("p1.script.js", "function main(c) { return c; }\n")
+            .unwrap();
+
+        let entry = ProfileEntry {
+            id: "p1".into(),
+            name: "Profile 1".into(),
+            source: ProfileSource::Local,
+            file_name: "p1.yaml".into(),
+            merge_file_name: Some("p1.merge.yaml".into()),
+            script_file_name: Some("p1.script.js".into()),
+        };
+
+        assert!(manager.profile_path("p1.yaml").unwrap().exists());
+        assert!(manager.override_path("p1.merge.yaml").unwrap().exists());
+        assert!(manager.override_path("p1.script.js").unwrap().exists());
+
+        manager.remove_profile_files(&entry).unwrap();
+
+        assert!(!manager.profile_path("p1.yaml").unwrap().exists());
+        assert!(!manager.override_path("p1.merge.yaml").unwrap().exists());
+        assert!(!manager.override_path("p1.script.js").unwrap().exists());
+
+        // Second removal ignores ErrorKind::NotFound cleanly.
+        manager.remove_profile_files(&entry).unwrap();
     }
 }

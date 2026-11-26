@@ -38,6 +38,91 @@ pub struct ProfileEntry {
     pub script_file_name: Option<String>,
 }
 
+/// Default probe URL used for proxy latency measurements.
+pub const DEFAULT_DELAY_TEST_URL: &str = "http://www.gstatic.com/generate_204";
+
+/// Minimum permitted IPv6/TUN interface MTU.
+const MIN_TUN_MTU: u16 = 1280;
+
+/// TUN virtual interface configuration persisted in `settings.toml`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TunConfig {
+    /// Network stack (`"system"`, `"gvisor"`, or `"mixed"`).
+    pub stack: String,
+    /// Whether the kernel should automatically configure OS routing tables.
+    pub auto_route: bool,
+    /// Whether strict route enforcement is enabled.
+    pub strict_route: bool,
+    /// DNS hijack rules (for example `["any:53"]`).
+    pub dns_hijack: Vec<String>,
+    /// Virtual interface MTU (validated `>= 1280`).
+    pub mtu: u16,
+    /// CIDR address ranges excluded from TUN routing.
+    pub route_exclude_address: Vec<String>,
+}
+
+impl Default for TunConfig {
+    fn default() -> Self {
+        Self {
+            stack: "mixed".into(),
+            auto_route: true,
+            strict_route: true,
+            dns_hijack: vec!["any:53".to_owned()],
+            mtu: 9000,
+            route_exclude_address: Vec::new(),
+        }
+    }
+}
+
+impl TunConfig {
+    /// Returns the safe default TUN configuration (`stack = "mixed"`, `mtu = 9000`).
+    pub fn safe_defaults() -> Self {
+        Self::default()
+    }
+
+    /// Normalizes string/list fields and validates TUN invariants.
+    pub fn normalize_and_validate(&mut self) -> Result<(), ConfigError> {
+        let normalized_stack = self.stack.trim().to_ascii_lowercase();
+        match normalized_stack.as_str() {
+            "system" | "gvisor" | "mixed" => {
+                self.stack = normalized_stack;
+            }
+            _ => {
+                return Err(ConfigError::InvalidField {
+                    field: "tun.stack",
+                    value: self.stack.clone(),
+                    reason: "expected one of \"system\", \"gvisor\", or \"mixed\"".into(),
+                });
+            }
+        }
+
+        if self.mtu < MIN_TUN_MTU {
+            return Err(ConfigError::InvalidField {
+                field: "tun.mtu",
+                value: self.mtu.to_string(),
+                reason: format!("MTU must be at least {MIN_TUN_MTU}"),
+            });
+        }
+
+        self.dns_hijack = self
+            .dns_hijack
+            .iter()
+            .map(|entry| entry.trim().to_owned())
+            .filter(|entry| !entry.is_empty())
+            .collect();
+
+        self.route_exclude_address = self
+            .route_exclude_address
+            .iter()
+            .map(|entry| entry.trim().to_owned())
+            .filter(|entry| !entry.is_empty())
+            .collect();
+
+        Ok(())
+    }
+}
+
 /// Syncable configuration domain persisted to `settings.toml`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -60,6 +145,8 @@ pub struct SyncableConfig {
     pub system_proxy_bypass: Vec<String>,
     /// Whether TUN virtual interface traffic capture is enabled.
     pub tun_enabled: bool,
+    /// Detailed TUN interface configuration injected when `tun_enabled` is `true`.
+    pub tun: TunConfig,
     /// Identifier of the currently selected active profile, if any.
     pub active_profile_id: Option<String>,
     /// Registered user profiles.
@@ -72,8 +159,12 @@ pub struct SyncableConfig {
     pub quick_rules: Vec<String>,
     /// UI color theme preference (`"system"`, `"light"`, or `"dark"`).
     pub theme_mode: String,
+    /// Optional Material 3 dynamic-color seed color encoded as ARGB (`0xFFRRGGBB`).
+    pub theme_seed_color: Option<u32>,
     /// Preferred UI locale tag (for example `"zh-CN"` or `"en-US"`).
     pub locale: String,
+    /// Default HTTP URL used for proxy latency probes.
+    pub default_delay_test_url: String,
 }
 
 impl Default for SyncableConfig {
@@ -88,13 +179,16 @@ impl Default for SyncableConfig {
             system_proxy_enabled: false,
             system_proxy_bypass: Vec::new(),
             tun_enabled: false,
+            tun: TunConfig::default(),
             active_profile_id: None,
             profiles: Vec::new(),
             global_merge_enabled: false,
             global_script_enabled: false,
             quick_rules: Vec::new(),
             theme_mode: "system".into(),
+            theme_seed_color: None,
             locale: "zh-CN".into(),
+            default_delay_test_url: DEFAULT_DELAY_TEST_URL.into(),
         }
     }
 }
@@ -118,9 +212,26 @@ impl SyncableConfig {
     pub fn normalize_and_validate(&mut self) -> Result<(), ConfigError> {
         self.schema_version = CURRENT_SCHEMA_VERSION;
         self.proxy_mode = normalize_proxy_mode(&self.proxy_mode)?;
+        if self.mixed_port == 0 {
+            return Err(ConfigError::InvalidField {
+                field: "mixed_port",
+                value: "0".into(),
+                reason: "mixed_port must be greater than 0".into(),
+            });
+        }
         self.log_level = normalize_log_level(&self.log_level)?;
+        self.tun.normalize_and_validate()?;
         self.theme_mode = normalize_theme_mode(&self.theme_mode)?;
         self.locale = normalize_locale(&self.locale)?;
+        let delay_url = self.default_delay_test_url.trim().to_owned();
+        if delay_url.is_empty() {
+            return Err(ConfigError::InvalidField {
+                field: "default_delay_test_url",
+                value: self.default_delay_test_url.clone(),
+                reason: "default_delay_test_url must not be empty".into(),
+            });
+        }
+        self.default_delay_test_url = delay_url;
 
         for profile in &self.profiles {
             if profile.id.trim().is_empty() {

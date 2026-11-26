@@ -11,7 +11,9 @@ use gpui_material::MaterialRoot;
 use tracing_subscriber::EnvFilter;
 use verve_core::compiler::CompilerPipeline;
 use verve_core::config::ConfigManager;
-use verve_core::kernel::{ControlEndpoint, DirectProcessSupervisor, KernelSupervisor};
+use verve_core::kernel::{
+    ControlEndpoint, DirectProcessSupervisor, KernelSupervisor, ServiceIpcClient,
+};
 use verve_core::kernel_mihomo::{MihomoKernel, MihomoKernelConfig};
 use verve_core::sys::{
     ActivationListener, OsEvent, OsEventBus, SingleInstanceGuard, create_platform_tray,
@@ -19,7 +21,7 @@ use verve_core::sys::{
 };
 use verve_core::{
     AppCoordinator, CommandBus, CoordinatorConfig, CoreError, MihomoCoordinatorBuilder,
-    SnapshotStore,
+    ProtocolServiceIpcClient, SnapshotStore, default_service_ipc_endpoint,
 };
 use verve_ui_kit::{AppearanceMode, DEFAULT_SEED_ARGB, build_material_theme, init_ui_kit};
 
@@ -68,7 +70,12 @@ struct BootBackend {
 }
 
 fn spawn_backend(data_dir: &PathBuf) -> Result<BootBackend, CoreError> {
-    match MihomoCoordinatorBuilder::new(data_dir).spawn() {
+    let service_ipc_client: Arc<dyn ServiceIpcClient> =
+        Arc::new(ProtocolServiceIpcClient::new(default_service_ipc_endpoint()));
+    match MihomoCoordinatorBuilder::new(data_dir)
+        .service_ipc_client(Arc::clone(&service_ipc_client))
+        .spawn()
+    {
         Ok(mut handle) => {
             let bus = handle.bus().clone();
             let snapshots = Arc::clone(handle.snapshots());
@@ -105,6 +112,7 @@ fn spawn_backend(data_dir: &PathBuf) -> Result<BootBackend, CoreError> {
                 kernel,
                 CoordinatorConfig {
                     control_endpoint: endpoint,
+                    service_ipc_client: Some(service_ipc_client),
                     ..Default::default()
                 },
             )?;
@@ -186,7 +194,11 @@ pub fn run_desktop_app() {
                 WindowAppearance::Dark | WindowAppearance::VibrantDark
             );
             init_ui_kit(
-                build_material_theme(mode, Some(DEFAULT_SEED_ARGB), system_dark),
+                build_material_theme(
+                    mode,
+                    syncable.theme_seed_color.or(Some(DEFAULT_SEED_ARGB)),
+                    system_dark,
+                ),
                 cx,
             );
 

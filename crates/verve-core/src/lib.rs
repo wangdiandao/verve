@@ -5,17 +5,25 @@ mod coordinator;
 mod error;
 mod service_ipc;
 mod snapshot;
+mod subscription;
 mod telemetry;
 
-pub use commands::{AppCommand, CommandBus};
+pub use commands::{AppCommand, BatchDelayResults, CommandBus, ServiceControlAction};
 pub use coordinator::{
     AppCoordinator, CoordinatorConfig, CoordinatorHandle, MihomoCoordinatorBuilder,
 };
 pub use error::CoreError;
-pub use service_ipc::ProtocolServiceIpcClient;
+pub use service_ipc::{
+    OsServiceControlBackend, ProtocolServiceIpcClient, ServiceControlBackend,
+    default_service_ipc_endpoint,
+};
 pub use snapshot::{
     ActivitySlice, AppSnapshot, DomainDirtyEvent, DomainKind, ProfilesSlice, ProxiesSlice,
-    Revision, RuntimeSlice, SettingsSlice, SnapshotStore, TelemetrySlice,
+    Revision, RuntimeSlice, ServiceStatus, SettingsSlice, SnapshotStore, TelemetrySlice,
+};
+pub use subscription::{
+    FetchedSubscription, ReqwestSubscriptionFetcher, SubscriptionFetcher, SubscriptionUserInfo,
+    generate_profile_id, infer_profile_name, parse_subscription_userinfo, validate_profile_yaml,
 };
 pub use telemetry::{
     DEFAULT_LOG_CAPACITY, DEFAULT_TRAFFIC_HISTORY_CAPACITY, TelemetryHub, TelemetryLease,

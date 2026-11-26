@@ -11,7 +11,9 @@ pub mod features;
 pub mod i18n;
 pub mod shell;
 
-pub use bridge::{CommandDispatcher, DomainChanged, TelemetrySource, UiStore, UiTelemetryLease};
+pub use bridge::{
+    CommandDispatcher, DomainChanged, TelemetrySource, ToastNotification, UiStore, UiTelemetryLease,
+};
 pub use i18n::AppLocale;
 pub use shell::{
     AppShell, ConfirmCallback, ConfirmDialogHost, ConfirmDialogSpec, NavigateCallback,

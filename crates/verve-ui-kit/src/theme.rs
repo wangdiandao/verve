@@ -9,6 +9,73 @@ use serde::{Deserialize, Serialize};
 /// Default Material 3 Expressive deep-teal seed color (`0xFF006A6A`).
 pub const DEFAULT_SEED_ARGB: u32 = 0xFF00_6A6A;
 
+/// Curated Material 3 Expressive dynamic-color seed preset.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ThemeSeedPreset {
+    /// Stable preset identifier (used as i18n/element key).
+    pub id: &'static str,
+    /// Opaque ARGB seed color (`0xFFRRGGBB`).
+    pub argb: u32,
+}
+
+/// Seven curated Material 3 Expressive seed color presets.
+pub const SEED_COLOR_PRESETS: &[ThemeSeedPreset] = &[
+    ThemeSeedPreset {
+        id: "deep_teal",
+        argb: 0xFF00_6A6A,
+    },
+    ThemeSeedPreset {
+        id: "ocean_blue",
+        argb: 0xFF1A_6585,
+    },
+    ThemeSeedPreset {
+        id: "indigo",
+        argb: 0xFF4F_5B92,
+    },
+    ThemeSeedPreset {
+        id: "forest_green",
+        argb: 0xFF2E_6B4F,
+    },
+    ThemeSeedPreset {
+        id: "terracotta",
+        argb: 0xFF9C_413D,
+    },
+    ThemeSeedPreset {
+        id: "plum",
+        argb: 0xFF7B_4E7F,
+    },
+    ThemeSeedPreset {
+        id: "amber",
+        argb: 0xFF82_5500,
+    },
+];
+
+/// Parses a hex color string (`#RRGGBB`, `RRGGBB`, `#AARRGGBB`, or `0xFFRRGGBB`)
+/// into an opaque ARGB seed color (`0xFF00_0000 | rgb`).
+pub fn parse_hex_seed_color(input: &str) -> Option<u32> {
+    let trimmed = input.trim();
+    let hex = trimmed
+        .strip_prefix('#')
+        .or_else(|| trimmed.strip_prefix("0x"))
+        .or_else(|| trimmed.strip_prefix("0X"))
+        .unwrap_or(trimmed);
+
+    if hex.len() != 6 && hex.len() != 8 {
+        return None;
+    }
+    if !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return None;
+    }
+
+    let parsed = u32::from_str_radix(hex, 16).ok()?;
+    Some(0xFF00_0000 | (parsed & 0x00FF_FFFF))
+}
+
+/// Formats an ARGB seed color (`0xFFRRGGBB`) as uppercase `"#RRGGBB"`.
+pub fn format_hex_seed_color(argb: u32) -> String {
+    format!("#{:06X}", argb & 0x00FF_FFFF)
+}
+
 /// User-facing appearance preference matching `verve-config`'s `"light" | "dark" | "system"` contract.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -389,5 +456,25 @@ mod tests {
             KernelHealthState::Starting.color(true),
             KernelHealthState::Stopped.color(true)
         );
+    }
+
+    #[test]
+    fn parses_and_formats_hex_seed_colors_and_presets() {
+        assert_eq!(SEED_COLOR_PRESETS.len(), 7);
+        assert_eq!(SEED_COLOR_PRESETS[0].argb, DEFAULT_SEED_ARGB);
+
+        assert_eq!(parse_hex_seed_color("#006A6A"), Some(0xFF00_6A6A));
+        assert_eq!(parse_hex_seed_color("1a6585"), Some(0xFF1A_6585));
+        assert_eq!(parse_hex_seed_color(" #804F5B92 "), Some(0xFF4F_5B92));
+        assert_eq!(parse_hex_seed_color("0xFF9C413D"), Some(0xFF9C_413D));
+        assert_eq!(parse_hex_seed_color("0X2E6B4F"), Some(0xFF2E_6B4F));
+
+        assert_eq!(parse_hex_seed_color(""), None);
+        assert_eq!(parse_hex_seed_color("#FFF"), None);
+        assert_eq!(parse_hex_seed_color("#ZZZZZZ"), None);
+        assert_eq!(parse_hex_seed_color("1234567"), None);
+
+        assert_eq!(format_hex_seed_color(0xFF00_6A6A), "#006A6A");
+        assert_eq!(format_hex_seed_color(0x001A_6585), "#1A6585");
     }
 }

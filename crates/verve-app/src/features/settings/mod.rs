@@ -13,11 +13,13 @@ use verve_ui_kit::{
 };
 
 use crate::bridge::{CommandDispatcher, DomainChanged, UiStore};
+use crate::shell::ShellHandle;
 
 /// Vertical feature view projecting [`verve_core::SettingsSlice`] (`SyncableConfig` + `LocalMachineConfig`).
 pub struct SettingsView {
     store: Entity<UiStore>,
     commands: CommandDispatcher,
+    _shell: ShellHandle,
     scroll: ScrollHandle,
     _store_sub: Subscription,
 }
@@ -27,6 +29,7 @@ impl SettingsView {
     pub fn new(
         store: Entity<UiStore>,
         commands: CommandDispatcher,
+        shell: ShellHandle,
         cx: &mut Context<Self>,
     ) -> Self {
         let store_sub = cx.subscribe(&store, |_, _, ev: &DomainChanged, cx| {
@@ -37,6 +40,7 @@ impl SettingsView {
         Self {
             store,
             commands,
+            _shell: shell,
             scroll: ScrollHandle::new(),
             _store_sub: store_sub,
         }
@@ -52,6 +56,7 @@ impl Render for SettingsView {
 
         let current_mode =
             AppearanceMode::from_config_str(&syncable.theme_mode).unwrap_or(AppearanceMode::System);
+        let current_seed = syncable.theme_seed_color.or(Some(DEFAULT_SEED_ARGB));
         let theme_commands = self.commands.clone();
         let appearance_selector = ButtonGroup::connected(
             "settings-theme-mode",
@@ -77,10 +82,7 @@ impl Render for SettingsView {
                     cx.window_appearance(),
                     WindowAppearance::Dark | WindowAppearance::VibrantDark
                 );
-                apply_theme(
-                    build_material_theme(mode, Some(DEFAULT_SEED_ARGB), system_dark),
-                    cx,
-                );
+                apply_theme(build_material_theme(mode, current_seed, system_dark), cx);
                 theme_commands.set_theme_mode(mode.as_config_str());
             }
         });

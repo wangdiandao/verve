@@ -145,7 +145,11 @@ impl AppShell {
                         WindowAppearance::Dark | WindowAppearance::VibrantDark
                     );
                     apply_theme(
-                        build_material_theme(mode, Some(DEFAULT_SEED_ARGB), system_dark),
+                        build_material_theme(
+                            mode,
+                            syncable.theme_seed_color.or(Some(DEFAULT_SEED_ARGB)),
+                            system_dark,
+                        ),
                         cx,
                     );
                 }
@@ -158,17 +162,18 @@ impl AppShell {
             DomainKind::Proxies | DomainKind::Profiles => {}
         });
 
-        let error_rx = commands.subscribe_errors();
+        let toast_rx = commands.subscribe_toasts();
         let snackbar_weak = snackbar_host.downgrade();
         let error_task = window.spawn(cx, async move |cx| {
-            while let Ok(message) = error_rx.recv().await {
+            while let Ok(toast) = toast_rx.recv().await {
+                let tone = if toast.is_error {
+                    SemanticTone::Danger
+                } else {
+                    SemanticTone::Default
+                };
                 let updated = cx.update(|window, cx| {
                     let _ = snackbar_weak.update(cx, |host, cx| {
-                        host.push(
-                            Snackbar::new(message).tone(SemanticTone::Danger),
-                            window,
-                            cx,
-                        );
+                        host.push(Snackbar::new(toast.message).tone(tone), window, cx);
                     });
                 });
                 if updated.is_err() {
@@ -267,7 +272,7 @@ impl AppShell {
                 cx.new(|cx| OverviewView::new(store, commands, shell, cx)),
             ),
             RouteId::Proxies => {
-                ActiveRouteView::Proxies(cx.new(|cx| ProxiesView::new(store, commands, cx)))
+                ActiveRouteView::Proxies(cx.new(|cx| ProxiesView::new(store, commands, shell, cx)))
             }
             RouteId::Profiles => ActiveRouteView::Profiles(
                 cx.new(|cx| ProfilesView::new(store, commands, shell, cx)),
@@ -275,9 +280,9 @@ impl AppShell {
             RouteId::Activity => {
                 ActiveRouteView::Activity(cx.new(|cx| ActivityView::new(store, commands, cx)))
             }
-            RouteId::Settings => {
-                ActiveRouteView::Settings(cx.new(|cx| SettingsView::new(store, commands, cx)))
-            }
+            RouteId::Settings => ActiveRouteView::Settings(
+                cx.new(|cx| SettingsView::new(store, commands, shell, cx)),
+            ),
         }
     }
 

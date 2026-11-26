@@ -15,6 +15,7 @@ use verve_core::kernel::{ProxyGroupKind, ProxyMode};
 use verve_ui_kit::{EmptyState, LatencyBadge, SectionCard, theme_tokens};
 
 use crate::bridge::{CommandDispatcher, DomainChanged, UiStore};
+use crate::shell::ShellHandle;
 use crate::shell::nav::symbol_icon;
 
 const DEFAULT_DELAY_TEST_URL: &str = "http://www.gstatic.com/generate_204";
@@ -24,6 +25,7 @@ const DEFAULT_DELAY_TIMEOUT: Duration = Duration::from_secs(5);
 pub struct ProxiesView {
     store: Entity<UiStore>,
     commands: CommandDispatcher,
+    _shell: ShellHandle,
     scroll: ScrollHandle,
     _store_sub: Subscription,
 }
@@ -33,6 +35,7 @@ impl ProxiesView {
     pub fn new(
         store: Entity<UiStore>,
         commands: CommandDispatcher,
+        shell: ShellHandle,
         cx: &mut Context<Self>,
     ) -> Self {
         let store_sub = cx.subscribe(&store, |_, _, ev: &DomainChanged, cx| {
@@ -46,6 +49,7 @@ impl ProxiesView {
         Self {
             store,
             commands,
+            _shell: shell,
             scroll: ScrollHandle::new(),
             _store_sub: store_sub,
         }

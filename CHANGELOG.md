@@ -4,8 +4,20 @@ See [versioning and releases](docs/release.md) for the version progression polic
 
 ## Unreleased
 
+### Core & Kernel
+
+- Added `TunConfig` (`stack`, `auto_route`, `strict_route`, `dns_hijack`, `mtu`, `route_exclude_address`), `theme_seed_color`, and `default_delay_test_url` to `SyncableConfig` with backwards-compatible TOML deserialization, validation, and safe `ConfigManager::remove_profile_files`.
+- Added `ProxyKernel::fetch_version` (implemented in `MihomoKernel`) and tracked `kernel_version`, `kernel_started_at_unix_secs`, and `ServiceStatus` in `RuntimeSlice`.
+- Implemented remote subscription fetching and validation (`SubscriptionFetcher` / `ReqwestSubscriptionFetcher`, `subscription-userinfo` / `profile-title` / `content-disposition` parsing) alongside 12 new `AppCoordinator` / `CommandBus` commands (`ImportRemoteProfile`, `RefreshProfile` with rollback on fetch/YAML error, `DeleteProfile`, `RestartKernel`, concurrent `TestGroupDelay` / `TestAllGroupsDelay`, `UpdateNetworkSettings`, `UpdateTunSettings`, `SetThemeSeedColor`, `SetAutoLaunch`, `SetServiceMode`, and `ServiceAction`).
+
+### Compiler & Overrides
+
+- Extended `RuntimeInjectionConfig` with `TunInjectionConfig` so `RuntimeInjectionStage` injects full TUN parameters (`stack`, `auto-route`, `strict-route`, `mtu`, `dns-hijack`, `route-exclude-address`, and `device`) when TUN mode is enabled.
+
 ### UI & UX
 
+- Added UTC date/datetime formatters (`format_unix_date`, `format_unix_datetime`), 7 Material 3 Expressive `SEED_COLOR_PRESETS`, and hex seed color parsing/formatting helpers to `verve-ui-kit`.
+- Wired `CommandDispatcher` async wrappers for all new P0 commands, dual error/info `ToastNotification` snackbar routing, dynamic `theme_seed_color` application, `ProtocolServiceIpcClient` bootstrap wiring, and shared `common.*` bilingual locale keys in `verve-app`.
 - Refined the `AppShell` navigation chrome: removed the redundant `NavigationRail` headline text, switched collapsed rail destinations to icon-only mode with larger 24dp icons, and removed the theme toggle button from the `TitleBar` (theme switching remains in `Settings`).
 - Upgraded `gpui-material` to `0.4.1` (bringing Material ripple/state-layer feedback, pill-expand & color-interpolated active indicators, and native `NavigationRail::footer` support) and moved the `AppShell` sidebar telemetry pod into `NavigationRail::footer`.
 - Unified the `AppShell` sidebar onto a single `NavigationRail` driven by `NavigationRailState` (`RailMode::Expanded` ↔ `RailMode::Collapsed`), enabling smooth sidebar width transitions and animated active-indicator crossfades across all navigation destinations.

@@ -215,6 +215,10 @@ impl ProxyKernel for MihomoKernel {
         }
     }
 
+    async fn fetch_version(&self) -> Result<Option<String>, KernelError> {
+        MihomoKernel::fetch_version(self).await.map(Some)
+    }
+
     async fn validate_config(&self, path: &Path) -> Result<(), Vec<ConfigDiagnostic>> {
         preflight::run_preflight(
             &self.config.binary_path,
