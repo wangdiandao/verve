@@ -6,6 +6,7 @@ See [versioning and releases](docs/release.md) for the version progression polic
 
 ### UI & UX
 
+- Unified the `AppShell` sidebar onto a single `NavigationRail` driven by `NavigationRailState` (`RailMode::Expanded` ↔ `RailMode::Collapsed`), enabling smooth sidebar width transitions and animated active-indicator crossfades across all navigation destinations.
 - Added `rust-i18n` bilingual (`zh-CN` / `en-US`) localization across the `verve-app` shell, all 5 feature views (`Overview`, `Proxies`, `Profiles`, `Activity`, `Settings`), and OS system tray menus (`TrayMenuLabels`), with live zero-restart language switching and canonical `locale` persistence in `settings.toml`.
 
 ## 0.0.2 - 2026-11-25

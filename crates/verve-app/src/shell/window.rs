@@ -7,8 +7,9 @@ use gpui::{
 };
 use gpui_material::window_chrome::{TitleBar, title_bar_window_options_with_height};
 use gpui_material::{
-    Badge, Icon, IconButton, IconName, NavigationDrawer, NavigationItem, NavigationItems,
-    NavigationRail, RailMode, Scaffold, SemanticTone, Snackbar, SnackbarHost,
+    Badge, Icon, IconButton, IconName, NavigationItem, NavigationItems, NavigationRail,
+    NavigationRailColors, NavigationRailState, RailMode, Scaffold, SemanticTone, Snackbar,
+    SnackbarHost,
 };
 use verve_core::DomainKind;
 use verve_core::kernel::TelemetryKind;
@@ -79,7 +80,7 @@ impl ActiveRouteView {
     }
 }
 
-/// Root window view hosting the 40px TitleBar, adaptive NavigationDrawer/Rail,
+/// Root window view hosting the 40px TitleBar, animated expandable/collapsible NavigationRail,
 /// bottom telemetry pod, active feature outlet, scoped sheet/dialog hosts, and error Snackbar.
 pub struct AppShell {
     store: Entity<UiStore>,
@@ -87,12 +88,14 @@ pub struct AppShell {
     active_route: RouteId,
     active_view: ActiveRouteView,
     sidebar_collapsed: bool,
+    rail_state: Entity<NavigationRailState>,
     sheet_host: Entity<SideSheetHost>,
     confirm_host: Entity<ConfirmDialogHost>,
     snackbar_host: Entity<SnackbarHost>,
     shell_handle: ShellHandle,
     _telemetry_lease: UiTelemetryLease,
     _store_sub: Subscription,
+    _rail_obs: Subscription,
     _error_task: gpui::Task<()>,
 }
 
@@ -105,6 +108,9 @@ impl AppShell {
         cx: &mut Context<Self>,
     ) -> Self {
         window.on_window_should_close(cx, |_, _| true);
+
+        let rail_state = cx.new(|_| NavigationRailState::new(RailMode::Expanded));
+        let rail_obs = cx.observe(&rail_state, |_, _, cx| cx.notify());
 
         let sheet_host = cx.new(SideSheetHost::new);
         let confirm_host = cx.new(ConfirmDialogHost::new);
@@ -176,12 +182,14 @@ impl AppShell {
             active_route: initial_route,
             active_view,
             sidebar_collapsed: false,
+            rail_state,
             sheet_host,
             confirm_host,
             snackbar_host,
             shell_handle,
             _telemetry_lease: telemetry_lease,
             _store_sub: store_sub,
+            _rail_obs: rail_obs,
             _error_task: error_task,
         }
     }
@@ -196,9 +204,18 @@ impl AppShell {
         self.sidebar_collapsed
     }
 
-    /// Toggles between expanded [`NavigationDrawer`] and compact [`NavigationRail`].
+    /// Toggles [`NavigationRail`] between [`RailMode::Expanded`] and [`RailMode::Collapsed`]
+    /// with a smooth width transition.
     pub fn toggle_sidebar(&mut self, cx: &mut Context<Self>) {
         self.sidebar_collapsed = !self.sidebar_collapsed;
+        let target = if self.sidebar_collapsed {
+            RailMode::Collapsed
+        } else {
+            RailMode::Expanded
+        };
+        self.rail_state.update(cx, |state, cx| {
+            state.animate_to(target, cx);
+        });
         cx.notify();
     }
 
@@ -461,26 +478,45 @@ impl Render for AppShell {
             }
         });
 
-        let sidebar = if self.sidebar_collapsed {
-            div()
-                .h_full()
-                .flex()
-                .flex_col()
-                .justify_between()
-                .bg(tokens.surface_container_low)
-                .border_r_1()
-                .border_color(tokens.outline_variant)
-                .child(div().flex_1().min_h_0().child(
-                    NavigationRail::new("verve-nav-rail", nav_items).mode(RailMode::Collapsed),
-                ))
-                .child(self.render_telemetry_pod(true, cx))
-                .into_any_element()
-        } else {
-            NavigationDrawer::new("verve-nav-drawer", nav_items)
-                .width(px(236.0))
-                .footer(self.render_telemetry_pod(false, cx))
-                .into_any_element()
-        };
+        let sidebar = div()
+            .h_full()
+            .flex()
+            .flex_col()
+            .justify_between()
+            .overflow_hidden()
+            .bg(tokens.surface_container_low)
+            .border_r_1()
+            .border_color(tokens.outline_variant)
+            .child(
+                div().flex_1().min_h_0().child(
+                    NavigationRail::new("verve-nav-rail", nav_items)
+                        .state(&self.rail_state)
+                        .expanded_width(px(236.0))
+                        .title(rust_i18n::t!("shell.primary_nav").into_owned())
+                        .colors(NavigationRailColors {
+                            container: Some(tokens.surface_container_low),
+                            ..Default::default()
+                        }),
+                ),
+            )
+            .child(
+                div()
+                    .w(px(0.0))
+                    .min_w_full()
+                    .overflow_hidden()
+                    .px(if self.sidebar_collapsed {
+                        px(0.0)
+                    } else {
+                        px(12.0)
+                    })
+                    .pb(if self.sidebar_collapsed {
+                        px(0.0)
+                    } else {
+                        px(12.0)
+                    })
+                    .child(self.render_telemetry_pod(self.sidebar_collapsed, cx)),
+            )
+            .into_any_element();
 
         let content_outlet = div()
             .flex_1()
