@@ -48,7 +48,7 @@ directories = "6.0"
 futures-util = "0.3"
 gpui = { package = "gpui-pre", version = "=0.3.14" }
 gpui-base = "=0.11.0"
-gpui-material = { version = "=0.4.0", features = ["dynamic-color", "expressive-groups", "search", "toolbars", "window-chrome"] }
+gpui-material = { version = "=0.4.1", features = ["dynamic-color", "expressive-groups", "search", "toolbars", "window-chrome"] }
 gpui-material-symbols = { version = "0.3.0", default-features = false, features = ["embed-assets"] }
 gpui_platform = { package = "gpui-pre-platform", version = "=0.3.14", features = ["font-kit", "x11", "wayland", "runtime_shaders"] }
 http = "1.5"
