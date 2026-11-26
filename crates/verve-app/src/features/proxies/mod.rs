@@ -875,20 +875,17 @@ impl Render for ProxiesView {
         if runtime.proxy_mode == ProxyMode::Direct {
             let switch_cmd = self.commands.clone();
             return root.child(
-                EmptyState::new(
-                    rust_i18n::t!("proxies.direct_empty.title").into_owned(),
-                    rust_i18n::t!("proxies.direct_empty.desc").into_owned(),
-                )
-                .action(
-                    Button::new(
-                        "proxies-switch-rule",
-                        rust_i18n::t!("proxies.direct_empty.switch_rule").into_owned(),
-                    )
-                    .variant(ButtonVariant::FilledTonal)
-                    .on_activate(move |_, _| {
-                        switch_cmd.set_proxy_mode(ProxyMode::Rule);
-                    }),
-                ),
+                EmptyState::new(rust_i18n::t!("proxies.direct_empty.title").into_owned(), "")
+                    .action(
+                        Button::new(
+                            "proxies-switch-rule",
+                            rust_i18n::t!("proxies.direct_empty.switch_rule").into_owned(),
+                        )
+                        .variant(ButtonVariant::FilledTonal)
+                        .on_activate(move |_, _| {
+                            switch_cmd.set_proxy_mode(ProxyMode::Rule);
+                        }),
+                    ),
             );
         }
 
@@ -949,33 +946,27 @@ impl Render for ProxiesView {
         );
 
         if visible_groups.is_empty() {
-            let (desc, action) = if runtime.kernel_running {
+            let action = if runtime.kernel_running {
                 let cmd = self.commands.clone();
-                (
-                    rust_i18n::t!("proxies.empty.running_desc").into_owned(),
-                    Button::new(
-                        "proxies-empty-refresh",
-                        rust_i18n::t!("common.refresh").into_owned(),
-                    )
-                    .variant(ButtonVariant::FilledTonal)
-                    .leading_icon(symbol_icon(Symbol::REFRESH))
-                    .on_activate(move |_, _| cmd.refresh_proxies()),
+                Button::new(
+                    "proxies-empty-refresh",
+                    rust_i18n::t!("common.refresh").into_owned(),
                 )
+                .variant(ButtonVariant::FilledTonal)
+                .leading_icon(symbol_icon(Symbol::REFRESH))
+                .on_activate(move |_, _| cmd.refresh_proxies())
             } else {
                 let cmd = self.commands.clone();
-                (
-                    rust_i18n::t!("proxies.empty.stopped_desc").into_owned(),
-                    Button::new(
-                        "proxies-start-kernel",
-                        rust_i18n::t!("proxies.empty.start_kernel").into_owned(),
-                    )
-                    .variant(ButtonVariant::Filled)
-                    .leading_icon(symbol_icon(Symbol::PLAY_ARROW))
-                    .on_activate(move |_, _| cmd.start_kernel()),
+                Button::new(
+                    "proxies-start-kernel",
+                    rust_i18n::t!("proxies.empty.start_kernel").into_owned(),
                 )
+                .variant(ButtonVariant::Filled)
+                .leading_icon(symbol_icon(Symbol::PLAY_ARROW))
+                .on_activate(move |_, _| cmd.start_kernel())
             };
             return root.child(
-                EmptyState::new(rust_i18n::t!("proxies.empty.title").into_owned(), desc)
+                EmptyState::new(rust_i18n::t!("proxies.empty.title").into_owned(), "")
                     .action(action),
             );
         }
@@ -1010,23 +1001,20 @@ impl Render for ProxiesView {
         if search_active && !rendered_any_group {
             let clear_view = cx.weak_entity();
             return root.child(
-                EmptyState::new(
-                    rust_i18n::t!("proxies.search_empty.title").into_owned(),
-                    rust_i18n::t!("proxies.search_empty.desc", query = trimmed_query).into_owned(),
-                )
-                .action(
-                    Button::new(
-                        "proxies-clear-search",
-                        rust_i18n::t!("proxies.clear_search").into_owned(),
-                    )
-                    .variant(ButtonVariant::FilledTonal)
-                    .leading_icon(symbol_icon(Symbol::CLOSE))
-                    .on_activate(move |window, cx| {
-                        let _ = clear_view.update(cx, |this, cx| {
-                            this.clear_search(window, cx);
-                        });
-                    }),
-                ),
+                EmptyState::new(rust_i18n::t!("proxies.search_empty.title").into_owned(), "")
+                    .action(
+                        Button::new(
+                            "proxies-clear-search",
+                            rust_i18n::t!("proxies.clear_search").into_owned(),
+                        )
+                        .variant(ButtonVariant::FilledTonal)
+                        .leading_icon(symbol_icon(Symbol::CLOSE))
+                        .on_activate(move |window, cx| {
+                            let _ = clear_view.update(cx, |this, cx| {
+                                this.clear_search(window, cx);
+                            });
+                        }),
+                    ),
             );
         }
 

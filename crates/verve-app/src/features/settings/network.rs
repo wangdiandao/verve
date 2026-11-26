@@ -13,15 +13,6 @@ use verve_ui_kit::{HealthIndicator, KernelHealthState, SectionCard, theme_tokens
 use super::{SettingsView, normalize_tun_stack};
 use crate::shell::nav::symbol_icon;
 
-/// Returns the platform-appropriate i18n key for privileged TUN guidance.
-pub(super) const fn platform_service_guidance_key() -> &'static str {
-    if cfg!(target_os = "linux") {
-        "settings.service.guidance_linux"
-    } else {
-        "settings.service.guidance_desktop"
-    }
-}
-
 /// Resolves the [`KernelHealthState`] and localized pill label for a [`ServiceStatus`].
 pub(super) fn service_status_badge(
     status: &ServiceStatus,
@@ -81,13 +72,9 @@ impl SettingsView {
             rust_i18n::t!("common.mixed_port").into_owned(),
             &inputs.mixed_port,
         );
-        port_field = if let Some(err) = self.mixed_port_error.as_ref() {
-            port_field.error(err.clone())
-        } else {
-            port_field.supporting_text(
-                rust_i18n::t!("settings.network.mixed_port_supporting").into_owned(),
-            )
-        };
+        if let Some(err) = self.mixed_port_error.as_ref() {
+            port_field = port_field.error(err.clone());
+        }
 
         let lan_commands = self.commands.clone();
         let lan_port = syncable.mixed_port;
@@ -98,7 +85,6 @@ impl SettingsView {
             rust_i18n::t!("settings.network.allow_lan").into_owned(),
             syncable.allow_lan,
         )
-        .supporting(rust_i18n::t!("settings.network.allow_lan_supporting").into_owned())
         .on_change(move |enabled, _, _| {
             lan_commands.update_network_settings(lan_port, enabled, lan_ipv6, lan_bypass.clone());
         });
@@ -112,7 +98,6 @@ impl SettingsView {
             rust_i18n::t!("settings.network.ipv6").into_owned(),
             syncable.ipv6,
         )
-        .supporting(rust_i18n::t!("settings.network.ipv6_supporting").into_owned())
         .on_change(move |enabled, _, _| {
             ipv6_commands.update_network_settings(
                 ipv6_port,
@@ -127,8 +112,7 @@ impl SettingsView {
             rust_i18n::t!("settings.network.bypass").into_owned(),
             &inputs.bypass,
         )
-        .variant(TextFieldVariant::Outlined)
-        .supporting_text(rust_i18n::t!("settings.network.bypass_supporting").into_owned());
+        .variant(TextFieldVariant::Outlined);
 
         let apply_view = cx.weak_entity();
         let apply_btn = Button::filled(
@@ -156,7 +140,6 @@ impl SettingsView {
 
         SectionCard::new()
             .title(rust_i18n::t!("settings.network.title").into_owned())
-            .subtitle(rust_i18n::t!("settings.network.subtitle").into_owned())
             .child(div().w(px(260.0)).max_w_full().child(port_field))
             .child(allow_lan_switch)
             .child(ipv6_switch)
@@ -224,7 +207,6 @@ impl SettingsView {
             rust_i18n::t!("settings.tun.auto_route").into_owned(),
             tun.auto_route,
         )
-        .supporting(rust_i18n::t!("settings.tun.auto_route_supporting").into_owned())
         .on_change(move |enabled, _, _| {
             let mut next = auto_route_tun.clone();
             next.auto_route = enabled;
@@ -239,7 +221,6 @@ impl SettingsView {
             rust_i18n::t!("settings.tun.strict_route").into_owned(),
             tun.strict_route,
         )
-        .supporting(rust_i18n::t!("settings.tun.strict_route_supporting").into_owned())
         .on_change(move |enabled, _, _| {
             let mut next = strict_route_tun.clone();
             next.strict_route = enabled;
@@ -251,32 +232,27 @@ impl SettingsView {
             rust_i18n::t!("settings.tun.mtu_label").into_owned(),
             &inputs.tun_mtu,
         );
-        mtu_field = if let Some(err) = self.tun_mtu_error.as_ref() {
-            mtu_field.error(err.clone())
-        } else {
-            mtu_field.supporting_text(rust_i18n::t!("settings.tun.mtu_supporting").into_owned())
-        };
+        if let Some(err) = self.tun_mtu_error.as_ref() {
+            mtu_field = mtu_field.error(err.clone());
+        }
 
         let dns_hijack_field = TextField::outlined(
             "settings-tun-dns-hijack",
             rust_i18n::t!("settings.tun.dns_hijack_label").into_owned(),
             &inputs.tun_dns_hijack,
-        )
-        .supporting_text(rust_i18n::t!("settings.tun.dns_hijack_supporting").into_owned());
+        );
 
         let exclude_routes_field = TextField::outlined(
             "settings-tun-exclude-routes",
             rust_i18n::t!("settings.tun.exclude_routes_label").into_owned(),
             &inputs.tun_exclude_routes,
-        )
-        .supporting_text(rust_i18n::t!("settings.tun.exclude_routes_supporting").into_owned());
+        );
 
         let interface_field = TextField::outlined(
             "settings-tun-interface",
             rust_i18n::t!("settings.tun.interface_label").into_owned(),
             &inputs.tun_interface,
-        )
-        .supporting_text(rust_i18n::t!("settings.tun.interface_supporting").into_owned());
+        );
 
         let apply_view = cx.weak_entity();
         let apply_btn = Button::filled(
@@ -304,7 +280,6 @@ impl SettingsView {
 
         SectionCard::new()
             .title(rust_i18n::t!("settings.tun.title").into_owned())
-            .subtitle(rust_i18n::t!("settings.tun.subtitle").into_owned())
             .child(
                 div()
                     .flex()
@@ -365,7 +340,6 @@ impl SettingsView {
             rust_i18n::t!("settings.machine.service_mode").into_owned(),
             local.service_mode_enabled,
         )
-        .supporting(rust_i18n::t!("settings.service.enable_supporting").into_owned())
         .on_change(move |enabled, _, _| {
             mode_commands.set_service_mode(enabled);
         });
@@ -403,17 +377,8 @@ impl SettingsView {
             });
         });
 
-        let guidance_banner = Banner::new(
-            "settings-service-guidance",
-            rust_i18n::t!(platform_service_guidance_key()).into_owned(),
-        )
-        .title(rust_i18n::t!("settings.service.guidance_title").into_owned())
-        .tone(SemanticTone::Info)
-        .icon(symbol_icon(Symbol::INFO));
-
         let mut card = SectionCard::new()
             .title(rust_i18n::t!("settings.service.title").into_owned())
-            .subtitle(rust_i18n::t!("settings.service.subtitle").into_owned())
             .header_trailing(HealthIndicator::new(health_state).label(health_label))
             .child(service_mode_switch);
 
@@ -437,7 +402,6 @@ impl SettingsView {
                 .child(install_btn)
                 .child(uninstall_btn),
         )
-        .child(guidance_banner)
     }
 }
 
@@ -477,15 +441,5 @@ mod tests {
             false,
         );
         assert_eq!(state, KernelHealthState::Stopped);
-    }
-
-    #[test]
-    fn selects_platform_guidance_key() {
-        let key = platform_service_guidance_key();
-        if cfg!(target_os = "linux") {
-            assert_eq!(key, "settings.service.guidance_linux");
-        } else {
-            assert_eq!(key, "settings.service.guidance_desktop");
-        }
     }
 }

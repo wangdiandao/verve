@@ -395,10 +395,6 @@ impl Render for NewLocalProfileSheet {
 
         if self.mode == LocalImportMode::CreateNew {
             name_field = name_field.required(true);
-        } else {
-            name_field = name_field.supporting_text(
-                rust_i18n::t!("profiles.local_sheet.name_optional_hint").into_owned(),
-            );
         }
 
         body = body.child(name_field);

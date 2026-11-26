@@ -148,13 +148,9 @@ impl SettingsView {
             rust_i18n::t!("settings.accent.custom_hex_label").into_owned(),
             &inputs.custom_seed_hex,
         );
-        hex_field = if let Some(err) = self.seed_hex_error.as_ref() {
-            hex_field.error(err.clone())
-        } else {
-            hex_field.supporting_text(
-                rust_i18n::t!("settings.accent.custom_hex_supporting").into_owned(),
-            )
-        };
+        if let Some(err) = self.seed_hex_error.as_ref() {
+            hex_field = hex_field.error(err.clone());
+        }
 
         let apply_hex_view = cx.weak_entity();
         let apply_hex_btn = Button::tonal(
@@ -182,7 +178,6 @@ impl SettingsView {
 
         verve_ui_kit::SectionCard::new()
             .title(rust_i18n::t!("settings.appearance.title").into_owned())
-            .subtitle(rust_i18n::t!("settings.appearance.subtitle").into_owned())
             .child(
                 div()
                     .flex()
@@ -204,21 +199,10 @@ impl SettingsView {
                     .gap(px(8.0))
                     .child(
                         div()
-                            .flex()
-                            .flex_col()
-                            .gap(px(2.0))
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .font_weight(FontWeight::MEDIUM)
-                                    .text_color(tokens.on_surface_variant)
-                                    .child(rust_i18n::t!("settings.accent.label").into_owned()),
-                            )
-                            .child(
-                                div().text_xs().text_color(tokens.on_surface_variant).child(
-                                    rust_i18n::t!("settings.accent.supporting").into_owned(),
-                                ),
-                            ),
+                            .text_xs()
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(tokens.on_surface_variant)
+                            .child(rust_i18n::t!("settings.accent.label").into_owned()),
                     )
                     .child(swatch_row),
             )
@@ -282,14 +266,12 @@ impl SettingsView {
             rust_i18n::t!("settings.machine.auto_launch").into_owned(),
             local.auto_launch,
         )
-        .supporting(rust_i18n::t!("settings.general.auto_launch_supporting").into_owned())
         .on_change(move |enabled, _, _| {
             autolaunch_commands.set_auto_launch(enabled);
         });
 
         verve_ui_kit::SectionCard::new()
             .title(rust_i18n::t!("settings.general.title").into_owned())
-            .subtitle(rust_i18n::t!("settings.general.subtitle").into_owned())
             .child(
                 div()
                     .flex()

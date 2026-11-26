@@ -159,7 +159,7 @@ impl Render for ActivityView {
                 if activity.connections.is_empty() {
                     EmptyState::new(
                         rust_i18n::t!("activity.connections.empty_title").into_owned(),
-                        rust_i18n::t!("activity.connections.empty_desc").into_owned(),
+                        "",
                     )
                     .into_any_element()
                 } else {
@@ -227,11 +227,8 @@ impl Render for ActivityView {
             }
             ActivityTab::Rules => {
                 if activity.rules.is_empty() {
-                    EmptyState::new(
-                        rust_i18n::t!("activity.rules.empty_title").into_owned(),
-                        rust_i18n::t!("activity.rules.empty_desc").into_owned(),
-                    )
-                    .into_any_element()
+                    EmptyState::new(rust_i18n::t!("activity.rules.empty_title").into_owned(), "")
+                        .into_any_element()
                 } else {
                     let mut card = SectionCard::new()
                         .title(rust_i18n::t!("activity.rules.card_title").into_owned())
@@ -275,11 +272,8 @@ impl Render for ActivityView {
             }
             ActivityTab::Logs => {
                 if activity.logs.is_empty() {
-                    EmptyState::new(
-                        rust_i18n::t!("activity.logs.empty_title").into_owned(),
-                        rust_i18n::t!("activity.logs.empty_desc").into_owned(),
-                    )
-                    .into_any_element()
+                    EmptyState::new(rust_i18n::t!("activity.logs.empty_title").into_owned(), "")
+                        .into_any_element()
                 } else {
                     let mut card = SectionCard::new()
                         .title(rust_i18n::t!("activity.logs.card_title").into_owned())

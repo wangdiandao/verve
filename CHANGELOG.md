@@ -4,6 +4,10 @@ See [versioning and releases](docs/release.md) for the version progression polic
 
 ## Unreleased
 
+### UI & UX
+
+- Removed explanatory card subtitles, switch/input supporting helper subtexts, empty-state explanatory descriptions, and the static service privilege guidance banner across all desktop views (`Overview`, `Proxies`, `Profiles`, `Activity`, `Settings`) while keeping live status telemetry, validation errors, and destructive confirmation prompts.
+
 ## 0.0.3 - 2026-11-26
 
 ### Core & Kernel

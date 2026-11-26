@@ -343,13 +343,16 @@ impl RenderOnce for EmptyState {
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(tokens.on_surface)
                     .child(self.heading),
-            )
-            .child(
+            );
+
+        if !self.description.is_empty() {
+            container = container.child(
                 div()
                     .text_sm()
                     .text_color(tokens.on_surface_variant)
                     .child(self.description),
             );
+        }
 
         if let Some(action) = self.action {
             container = container.child(div().pt(px(4.0)).child(action));

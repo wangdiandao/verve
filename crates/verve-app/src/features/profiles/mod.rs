@@ -401,11 +401,7 @@ impl Render for ProfilesView {
         if profiles.profiles.is_empty() {
             let weak_empty = cx.weak_entity();
             return root.child(
-                EmptyState::new(
-                    rust_i18n::t!("profiles.empty.title").into_owned(),
-                    rust_i18n::t!("profiles.empty.desc").into_owned(),
-                )
-                .action(
+                EmptyState::new(rust_i18n::t!("profiles.empty.title").into_owned(), "").action(
                     Button::new(
                         "profiles-empty-new-local",
                         rust_i18n::t!("profiles.new_local_btn").into_owned(),
@@ -894,13 +890,6 @@ impl Render for ProfileDetailSheet {
                 rust_i18n::t!("profiles.sheet.last_updated").into_owned(),
                 format_unix_datetime(u.updated_at_unix_secs),
             ));
-        } else {
-            content = content.child(
-                div()
-                    .text_xs()
-                    .text_color(tokens.on_surface_variant)
-                    .child(rust_i18n::t!("profiles.sheet.no_usage").into_owned()),
-            );
         }
 
         content
