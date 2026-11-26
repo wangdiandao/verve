@@ -17,6 +17,19 @@ use verve_app::{
     AppShell, CommandDispatcher, ConfirmDialogSpec, RouteId, SideSheetSpec, TelemetrySource,
     TrayController, UiStore, default_main_window_options,
 };
+
+static LOCALE_TEST_MUTEX: Mutex<()> = Mutex::new(());
+
+struct SharedHeadlessTray(Arc<Mutex<HeadlessTrayBackend>>);
+
+impl verve_core::sys::TrayBackend for SharedHeadlessTray {
+    fn update_state(
+        &mut self,
+        state: &verve_core::sys::TrayMenuState,
+    ) -> Result<(), verve_core::sys::SysError> {
+        self.0.lock().unwrap().update_state(state)
+    }
+}
 use verve_core::compiler::CompilerPipeline;
 use verve_core::config::ConfigManager;
 use verve_core::kernel::{
@@ -163,6 +176,8 @@ fn wait_until(
 
 #[gpui::test]
 fn shell_navigates_all_routes_toggles_theme_and_opens_hosts(cx: &mut TestAppContext) {
+    let _locale_guard = LOCALE_TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    verve_app::i18n::apply_locale("zh-CN");
     cx.background_executor.allow_parking();
     let dir = tempfile::tempdir().expect("tempdir");
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -305,6 +320,8 @@ fn shell_navigates_all_routes_toggles_theme_and_opens_hosts(cx: &mut TestAppCont
 
 #[gpui::test]
 fn window_close_drops_telemetry_leases_and_tray_reopens_with_live_state(cx: &mut TestAppContext) {
+    let _locale_guard = LOCALE_TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    verve_app::i18n::apply_locale("zh-CN");
     cx.background_executor.allow_parking();
     let dir = tempfile::tempdir().expect("tempdir");
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -347,16 +364,6 @@ fn window_close_drops_telemetry_leases_and_tray_reopens_with_live_state(cx: &mut
 
     let (tray_backend, tray_rx) = HeadlessTrayBackend::new();
     let backend_handle = Arc::new(Mutex::new(tray_backend));
-
-    struct SharedHeadlessTray(Arc<Mutex<HeadlessTrayBackend>>);
-    impl verve_core::sys::TrayBackend for SharedHeadlessTray {
-        fn update_state(
-            &mut self,
-            state: &verve_core::sys::TrayMenuState,
-        ) -> Result<(), verve_core::sys::SysError> {
-            self.0.lock().unwrap().update_state(state)
-        }
-    }
 
     let last_shell: Rc<RefCell<Option<WeakEntity<AppShell>>>> = Rc::new(RefCell::new(None));
     let last_shell_c = Rc::clone(&last_shell);
@@ -499,4 +506,182 @@ fn window_close_drops_telemetry_leases_and_tray_reopens_with_live_state(cx: &mut
     rt.block_on(async {
         handle.shutdown().await.unwrap();
     });
+}
+
+#[gpui::test]
+fn bilingual_locale_switching_updates_ui_tray_and_persists(cx: &mut TestAppContext) {
+    let _locale_guard = LOCALE_TEST_MUTEX.lock().unwrap_or_else(|e| e.into_inner());
+    verve_app::i18n::apply_locale("zh-CN");
+    cx.background_executor.allow_parking();
+
+    let dir = tempfile::tempdir().expect("tempdir");
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("tokio runtime");
+
+    let cfg_mgr = ConfigManager::open(dir.path()).expect("config manager");
+    let sysproxy_backend = Arc::new(InMemorySystemProxyBackend::default());
+    let kernel = Arc::new(TestKernel::default());
+
+    let mut handle = rt.block_on(async {
+        AppCoordinator::spawn(
+            cfg_mgr,
+            CompilerPipeline::default(),
+            KernelSupervisor::Direct(DirectProcessSupervisor::new()),
+            Arc::clone(&kernel),
+            CoordinatorConfig {
+                control_endpoint: ControlEndpoint::default_for_session("gpui-test-i18n"),
+                system_proxy_backend: Some(sysproxy_backend),
+                ..Default::default()
+            },
+        )
+        .expect("spawn coordinator")
+    });
+
+    rt.block_on(async {
+        handle
+            .bus()
+            .import_local_profile(
+                "demo",
+                "Demo Profile",
+                "mixed-port: 7890\nrules:\n  - MATCH,DIRECT\n",
+                None,
+            )
+            .await
+            .unwrap();
+    });
+
+    cx.update(|cx| {
+        let initial_locale = handle.snapshot().settings.syncable.locale.clone();
+        verve_app::i18n::apply_locale(&initial_locale);
+        let light = build_material_theme(AppearanceMode::Light, Some(DEFAULT_SEED_ARGB), false);
+        init_ui_kit(light, cx);
+        cx.set_reduce_motion(true);
+    });
+
+    let snapshots = Arc::clone(handle.snapshots());
+    let telemetry_source: Arc<dyn TelemetrySource> = Arc::new(handle.telemetry().clone());
+    let commands = CommandDispatcher::new(handle.bus().clone(), rt.handle().clone());
+    let store = cx.update(|cx| {
+        cx.new(|cx| UiStore::new(snapshots, telemetry_source, rt.handle().clone(), cx))
+    });
+
+    let (tray_backend, tray_rx) = HeadlessTrayBackend::new();
+    let backend_handle = Arc::new(Mutex::new(tray_backend));
+
+    let open_store = store.clone();
+    let open_cmds = commands.clone();
+    let shell_ref: Rc<RefCell<Option<Entity<AppShell>>>> = Rc::new(RefCell::new(None));
+    let shell_cap = Rc::clone(&shell_ref);
+    let open_window = Rc::new(move |cx: &mut gpui::App| {
+        let opts = default_main_window_options(cx);
+        let store_c = open_store.clone();
+        let cmds_c = open_cmds.clone();
+        let cap = Rc::clone(&shell_cap);
+        MaterialRoot::open_window(opts, cx, move |window, cx| {
+            let shell = cx.new(|cx| AppShell::new(store_c, cmds_c, window, cx));
+            *cap.borrow_mut() = Some(shell.clone());
+            shell
+        })
+    });
+
+    let tray = cx.update(|cx| {
+        cx.new(|cx| {
+            TrayController::new(
+                Box::new(SharedHeadlessTray(Arc::clone(&backend_handle))),
+                tray_rx,
+                store.clone(),
+                commands.clone(),
+                open_window,
+                Some(Rc::new(|_| {})),
+                cx,
+            )
+        })
+    });
+
+    let win = cx.update(|cx| {
+        tray.update(cx, |ctrl, cx| ctrl.show_or_focus_window(cx))
+            .expect("open window")
+    });
+    let shell = shell_ref.borrow().clone().expect("shell captured");
+
+    // 1. Default startup locale is zh-CN.
+    assert_eq!(RouteId::Overview.localized_label(), "概览");
+    assert_eq!(
+        cx.read(|cx| tray.read(cx).menu_state().labels.mode_rule.clone()),
+        "模式：规则"
+    );
+    assert_eq!(
+        cx.read(|cx| tray.read(cx).menu_state().labels.quit.clone()),
+        "退出"
+    );
+
+    for route in RouteId::ALL {
+        cx.update_window(win.into(), |_, window, cx| {
+            shell.update(cx, |s, cx| s.navigate(route, window, cx));
+            let _ = window.draw(cx);
+        })
+        .expect("zh-CN route draw must succeed");
+    }
+
+    // 2. Switch to en-US and verify live store, global locale, tray labels, and all 5 routes.
+    commands.set_locale("en-US");
+    wait_until(
+        cx,
+        Duration::from_secs(2),
+        "locale switches to en-US",
+        |cx| {
+            cx.read(|cx| store.read(cx).settings().syncable.locale == "en-US")
+                && cx.read(|cx| tray.read(cx).menu_state().labels.mode_rule == "Mode: Rule")
+        },
+    );
+
+    assert_eq!(RouteId::Overview.localized_label(), "Overview");
+    assert_eq!(RouteId::Settings.localized_label(), "Settings");
+    assert_eq!(
+        cx.read(|cx| tray.read(cx).menu_state().labels.show_window.clone()),
+        "Show Verve"
+    );
+    assert_eq!(
+        cx.read(|cx| tray.read(cx).menu_state().labels.quit.clone()),
+        "Quit"
+    );
+
+    for route in RouteId::ALL {
+        cx.update_window(win.into(), |_, window, cx| {
+            shell.update(cx, |s, cx| s.navigate(route, window, cx));
+            let _ = window.draw(cx);
+        })
+        .expect("en-US route draw must succeed");
+    }
+
+    // 3. Switch back to zh-CN and verify persistence in settings.toml.
+    commands.set_locale("zh-CN");
+    wait_until(
+        cx,
+        Duration::from_secs(2),
+        "locale switches back to zh-CN",
+        |cx| {
+            cx.read(|cx| store.read(cx).settings().syncable.locale == "zh-CN")
+                && cx.read(|cx| tray.read(cx).menu_state().labels.mode_rule == "模式：规则")
+        },
+    );
+    assert_eq!(RouteId::Overview.localized_label(), "概览");
+
+    cx.update_window(win.into(), |_, window, _| {
+        window.remove_window();
+    })
+    .unwrap();
+    cx.run_until_parked();
+
+    rt.block_on(async {
+        handle.shutdown().await.unwrap();
+    });
+
+    let reloaded = ConfigManager::open(dir.path())
+        .unwrap()
+        .load_syncable()
+        .unwrap();
+    assert_eq!(reloaded.locale, "zh-CN");
 }

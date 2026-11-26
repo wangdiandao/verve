@@ -116,6 +116,22 @@ impl RouteId {
         }
     }
 
+    /// `rust-i18n` translation key for this navigation destination.
+    pub const fn label_key(self) -> &'static str {
+        match self {
+            Self::Overview => "nav.overview",
+            Self::Proxies => "nav.proxies",
+            Self::Profiles => "nav.profiles",
+            Self::Activity => "nav.activity",
+            Self::Settings => "nav.settings",
+        }
+    }
+
+    /// Localized navigation label for the active `rust-i18n` locale.
+    pub fn localized_label(self) -> String {
+        rust_i18n::t!(self.label_key()).into_owned()
+    }
+
     /// Material Symbol icon for this navigation destination.
     pub fn icon(self) -> Icon {
         let symbol = match self {

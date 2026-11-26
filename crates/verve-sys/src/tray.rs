@@ -17,6 +17,43 @@ pub enum TrayIconState {
     Tun,
 }
 
+/// Localized text labels for OS system tray menu items.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TrayMenuLabels {
+    /// Menu item label when the main window is hidden.
+    pub show_window: String,
+    /// Menu item label when the main window is visible.
+    pub hide_window: String,
+    /// Menu item label for `rule` proxy mode.
+    pub mode_rule: String,
+    /// Menu item label for `global` proxy mode.
+    pub mode_global: String,
+    /// Menu item label for `direct` proxy mode.
+    pub mode_direct: String,
+    /// Menu item label for system proxy toggle.
+    pub system_proxy: String,
+    /// Menu item label for TUN mode toggle.
+    pub tun_mode: String,
+    /// Menu item label for exiting the application.
+    pub quit: String,
+}
+
+impl Default for TrayMenuLabels {
+    fn default() -> Self {
+        Self {
+            show_window: "Show Verve".into(),
+            hide_window: "Hide Verve".into(),
+            mode_rule: "Mode: Rule".into(),
+            mode_global: "Mode: Global".into(),
+            mode_direct: "Mode: Direct".into(),
+            system_proxy: "System Proxy".into(),
+            tun_mode: "TUN Mode".into(),
+            quit: "Quit".into(),
+        }
+    }
+}
+
 /// Snapshot of UI and proxy runtime state reflected by the tray menu and icon.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct TrayMenuState {
@@ -28,6 +65,9 @@ pub struct TrayMenuState {
     pub system_proxy_enabled: bool,
     /// Whether TUN mode is enabled.
     pub tun_enabled: bool,
+    /// Localized labels rendered into the OS tray context menu.
+    #[serde(default)]
+    pub labels: TrayMenuLabels,
 }
 
 impl TrayMenuState {
@@ -39,6 +79,17 @@ impl TrayMenuState {
             TrayIconState::SystemProxy
         } else {
             TrayIconState::Idle
+        }
+    }
+
+    /// Returns the localized label matching the active [`Self::proxy_mode`].
+    pub fn active_mode_label(&self) -> &str {
+        if self.proxy_mode.eq_ignore_ascii_case("global") {
+            &self.labels.mode_global
+        } else if self.proxy_mode.eq_ignore_ascii_case("direct") {
+            &self.labels.mode_direct
+        } else {
+            &self.labels.mode_rule
         }
     }
 }
@@ -205,7 +256,7 @@ mod native_desktop {
         Icon, MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent,
     };
 
-    use super::{TrayAction, TrayIconState, TrayMenuState, render_tray_icon_rgba};
+    use super::{TrayAction, TrayIconState, TrayMenuLabels, TrayMenuState, render_tray_icon_rgba};
     use crate::SysError;
 
     const ICON_SIZE: u32 = 32;
@@ -265,14 +316,17 @@ mod native_desktop {
     }
 
     fn build_tray_objects() -> Result<TrayObjects, SysError> {
-        let toggle_window = MenuItem::with_id(ID_TOGGLE_WINDOW, "Show / Hide Verve", true, None);
-        let mode_rule = CheckMenuItem::with_id(ID_MODE_RULE, "Mode: Rule", true, true, None);
-        let mode_global = CheckMenuItem::with_id(ID_MODE_GLOBAL, "Mode: Global", true, false, None);
-        let mode_direct = CheckMenuItem::with_id(ID_MODE_DIRECT, "Mode: Direct", true, false, None);
+        let defaults = TrayMenuLabels::default();
+        let toggle_window = MenuItem::with_id(ID_TOGGLE_WINDOW, &defaults.show_window, true, None);
+        let mode_rule = CheckMenuItem::with_id(ID_MODE_RULE, &defaults.mode_rule, true, true, None);
+        let mode_global =
+            CheckMenuItem::with_id(ID_MODE_GLOBAL, &defaults.mode_global, true, false, None);
+        let mode_direct =
+            CheckMenuItem::with_id(ID_MODE_DIRECT, &defaults.mode_direct, true, false, None);
         let system_proxy =
-            CheckMenuItem::with_id(ID_SYSTEM_PROXY, "System Proxy", true, false, None);
-        let tun = CheckMenuItem::with_id(ID_TUN, "TUN Mode", true, false, None);
-        let quit = MenuItem::with_id(ID_QUIT, "Quit", true, None);
+            CheckMenuItem::with_id(ID_SYSTEM_PROXY, &defaults.system_proxy, true, false, None);
+        let tun = CheckMenuItem::with_id(ID_TUN, &defaults.tun_mode, true, false, None);
+        let quit = MenuItem::with_id(ID_QUIT, &defaults.quit, true, None);
 
         let menu = Menu::new();
         menu.append_items(&[
@@ -312,6 +366,7 @@ mod native_desktop {
             mode_direct,
             system_proxy,
             tun,
+            quit,
         })
     }
 
@@ -323,15 +378,23 @@ mod native_desktop {
         mode_direct: CheckMenuItem,
         system_proxy: CheckMenuItem,
         tun: CheckMenuItem,
+        quit: MenuItem,
     }
 
     impl TrayObjects {
         fn apply_state(&self, state: &TrayMenuState) -> Result<(), SysError> {
             self.toggle_window.set_text(if state.window_visible {
-                "Hide Verve"
+                &state.labels.hide_window
             } else {
-                "Show Verve"
+                &state.labels.show_window
             });
+            self.mode_rule.set_text(&state.labels.mode_rule);
+            self.mode_global.set_text(&state.labels.mode_global);
+            self.mode_direct.set_text(&state.labels.mode_direct);
+            self.system_proxy.set_text(&state.labels.system_proxy);
+            self.tun.set_text(&state.labels.tun_mode);
+            self.quit.set_text(&state.labels.quit);
+
             self.mode_rule
                 .set_checked(state.proxy_mode.eq_ignore_ascii_case("rule"));
             self.mode_global
@@ -353,13 +416,17 @@ mod native_desktop {
 
             let tooltip = format!(
                 "Verve ({}{}{})",
-                state.proxy_mode,
+                state.active_mode_label(),
                 if state.system_proxy_enabled {
-                    ", SysProxy"
+                    format!(", {}", state.labels.system_proxy)
                 } else {
-                    ""
+                    String::new()
                 },
-                if state.tun_enabled { ", TUN" } else { "" }
+                if state.tun_enabled {
+                    format!(", {}", state.labels.tun_mode)
+                } else {
+                    String::new()
+                }
             );
             let _ = self.tray_icon.set_tooltip(Some(tooltip));
             Ok(())
@@ -601,7 +668,7 @@ mod linux_ksni {
     const ICON_SIZE: u32 = 32;
 
     enum WorkerCmd {
-        Update(TrayMenuState),
+        Update(Box<TrayMenuState>),
         Shutdown,
     }
 
@@ -646,7 +713,7 @@ mod linux_ksni {
         fn tool_tip(&self) -> ksni::ToolTip {
             ksni::ToolTip {
                 title: "Verve".into(),
-                description: format!("Mode: {}", self.state.proxy_mode),
+                description: self.state.active_mode_label().to_owned(),
                 ..Default::default()
             }
         }
@@ -661,9 +728,9 @@ mod linux_ksni {
             vec![
                 StandardItem {
                     label: if self.state.window_visible {
-                        "Hide Verve".into()
+                        self.state.labels.hide_window.clone()
                     } else {
-                        "Show Verve".into()
+                        self.state.labels.show_window.clone()
                     },
                     activate: Box::new(|this: &mut Self| {
                         let _ = this.action_tx.send(TrayAction::ToggleWindow);
@@ -686,15 +753,15 @@ mod linux_ksni {
                     }),
                     options: vec![
                         RadioItem {
-                            label: "Mode: Rule".into(),
+                            label: self.state.labels.mode_rule.clone(),
                             ..Default::default()
                         },
                         RadioItem {
-                            label: "Mode: Global".into(),
+                            label: self.state.labels.mode_global.clone(),
                             ..Default::default()
                         },
                         RadioItem {
-                            label: "Mode: Direct".into(),
+                            label: self.state.labels.mode_direct.clone(),
                             ..Default::default()
                         },
                     ],
@@ -702,7 +769,7 @@ mod linux_ksni {
                 .into(),
                 ksni::MenuItem::Separator,
                 CheckmarkItem {
-                    label: "System Proxy".into(),
+                    label: self.state.labels.system_proxy.clone(),
                     checked: self.state.system_proxy_enabled,
                     activate: Box::new(|this: &mut Self| {
                         let _ = this.action_tx.send(TrayAction::ToggleSystemProxy);
@@ -711,7 +778,7 @@ mod linux_ksni {
                 }
                 .into(),
                 CheckmarkItem {
-                    label: "TUN Mode".into(),
+                    label: self.state.labels.tun_mode.clone(),
                     checked: self.state.tun_enabled,
                     activate: Box::new(|this: &mut Self| {
                         let _ = this.action_tx.send(TrayAction::ToggleTun);
@@ -721,7 +788,7 @@ mod linux_ksni {
                 .into(),
                 ksni::MenuItem::Separator,
                 StandardItem {
-                    label: "Quit".into(),
+                    label: self.state.labels.quit.clone(),
                     icon_name: "application-exit".into(),
                     activate: Box::new(|this: &mut Self| {
                         let _ = this.action_tx.send(TrayAction::Quit);
@@ -789,7 +856,7 @@ mod linux_ksni {
                                 WorkerCmd::Update(next_state) => {
                                     let _ = handle
                                         .update(move |tray: &mut KsniState| {
-                                            tray.state = next_state;
+                                            tray.state = *next_state;
                                         })
                                         .await;
                                 }
@@ -815,7 +882,7 @@ mod linux_ksni {
     impl TrayBackend for LinuxKsniTray {
         fn update_state(&mut self, state: &TrayMenuState) -> Result<(), SysError> {
             self.cmd_tx
-                .send(WorkerCmd::Update(state.clone()))
+                .send(WorkerCmd::Update(Box::new(state.clone())))
                 .map_err(|_| SysError::Tray("ksni tray worker is no longer running".into()))
         }
     }
@@ -870,6 +937,7 @@ mod tests {
             proxy_mode: "rule".into(),
             system_proxy_enabled: true,
             tun_enabled: false,
+            ..Default::default()
         };
         assert_eq!(state1.icon_state(), TrayIconState::SystemProxy);
         backend.update_state(&state1).unwrap();
@@ -879,6 +947,7 @@ mod tests {
             proxy_mode: "global".into(),
             system_proxy_enabled: true,
             tun_enabled: true,
+            ..Default::default()
         };
         assert_eq!(state2.icon_state(), TrayIconState::Tun);
         backend.update_state(&state2).unwrap();
@@ -905,7 +974,34 @@ mod tests {
             proxy_mode: "rule".into(),
             system_proxy_enabled: false,
             tun_enabled: false,
+            ..Default::default()
         };
         assert_eq!(state.icon_state(), TrayIconState::Idle);
+        assert_eq!(state.active_mode_label(), "Mode: Rule");
+    }
+
+    #[test]
+    fn tray_menu_labels_round_trip_and_resolve_active_mode() {
+        let labels = TrayMenuLabels {
+            show_window: "显示 Verve".into(),
+            hide_window: "隐藏 Verve".into(),
+            mode_rule: "模式：规则".into(),
+            mode_global: "模式：全局".into(),
+            mode_direct: "模式：直连".into(),
+            system_proxy: "系统代理".into(),
+            tun_mode: "TUN 模式".into(),
+            quit: "退出".into(),
+        };
+        let state = TrayMenuState {
+            window_visible: true,
+            proxy_mode: "global".into(),
+            system_proxy_enabled: false,
+            tun_enabled: true,
+            labels,
+        };
+        assert_eq!(state.active_mode_label(), "模式：全局");
+        let json = serde_json::to_string(&state).unwrap();
+        let decoded: TrayMenuState = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded, state);
     }
 }

@@ -29,7 +29,7 @@ pub use tray::LinuxKsniTray;
 #[cfg(any(target_os = "windows", target_os = "macos"))]
 pub use tray::NativeTray;
 pub use tray::{
-    HeadlessTrayBackend, TrayAction, TrayBackend, TrayIconState, TrayMenuState,
+    HeadlessTrayBackend, TrayAction, TrayBackend, TrayIconState, TrayMenuLabels, TrayMenuState,
     create_platform_tray, render_tray_icon_rgba,
 };
 

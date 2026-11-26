@@ -1,0 +1,189 @@
+_version: 1
+
+common:
+  cancel: "Cancel"
+  close: "Close"
+  refresh: "Refresh"
+  download: "Download"
+  upload: "Upload"
+  none: "None"
+  enabled: "Enabled"
+  disabled: "Disabled"
+  mixed_port: "Mixed Port"
+  proxy_mode_label: "Proxy routing mode"
+
+mode:
+  rule: "Rule"
+  global: "Global"
+  direct: "Direct"
+
+nav:
+  overview: "Overview"
+  proxies: "Proxies"
+  profiles: "Profiles"
+  activity: "Activity"
+  settings: "Settings"
+
+shell:
+  primary_nav: "Primary Navigation"
+  expand_nav: "Expand navigation"
+  collapse_nav: "Collapse navigation"
+  switch_to_light: "Switch to Light theme"
+  switch_to_dark: "Switch to Dark theme"
+  health:
+    running: "Running · :%{port}"
+    running_short: "Running"
+    stopped: "Stopped"
+    fault: "Fault"
+  telemetry:
+    ram: "RAM %{value}"
+
+tray:
+  show_window: "Show Verve"
+  hide_window: "Hide Verve"
+  mode_rule: "Mode: Rule"
+  mode_global: "Mode: Global"
+  mode_direct: "Mode: Direct"
+  system_proxy: "System Proxy"
+  tun_mode: "TUN Mode"
+  quit: "Quit"
+
+overview:
+  title: "Overview"
+  pid: "PID %{pid}"
+  start_kernel: "Start Kernel"
+  stop_kernel: "Stop Kernel"
+  network_card:
+    title: "Network & Mode"
+    subtitle: "Routing strategy, OS proxy takeover, and kernel lifecycle"
+  system_proxy:
+    title: "System Proxy"
+    supporting: "Routes OS HTTP/SOCKS traffic via 127.0.0.1:%{port}"
+  tun:
+    title: "TUN Mode"
+    supporting_service: "Privileged service mode enabled for TUN capture"
+    supporting_direct: "Direct unprivileged mode (enable service mode in local config for elevated TUN)"
+  profile_card:
+    title: "Active Profile"
+    no_quota: "No remote quota recorded"
+    usage: "Down %{down} · Up %{up}"
+    manage: "Manage"
+    metric_profile: "Profile"
+    metric_count: "Registered Profiles"
+    empty_title: "No active profile"
+    empty_desc: "Select or import a profile to compile runtime configuration."
+    open_profiles: "Open Profiles"
+  traffic_card:
+    title: "Live Traffic"
+    subtitle: "Real-time kernel throughput and memory telemetry"
+    window_label: "Traffic chart window"
+    window_1m: "1m"
+    window_5m: "5m"
+    download: "Download"
+    upload: "Upload"
+    total_down: "Total Down"
+    total_up: "Total Up"
+    memory: "Kernel Memory"
+
+proxies:
+  title: "Proxies"
+  direct_empty:
+    title: "Direct Mode Active"
+    desc: "All connections bypass proxy selectors while routing mode is set to Direct."
+  empty:
+    title: "No proxy groups loaded"
+    running_desc: "No proxy groups returned by the kernel yet. Try refreshing."
+    stopped_desc: "Start the proxy kernel to load groups and switch outbound nodes."
+  protocol_group: "group"
+  protocol_udp: "%{protocol} · UDP"
+  probe_tooltip: "Probe %{node}"
+  group_subtitle: "%{kind} · Current: %{current}"
+  kind:
+    select: "Select"
+    url_test: "URLTest"
+    fallback: "Fallback"
+    load_balance: "LoadBalance"
+    relay: "Relay"
+    direct: "Direct"
+    reject: "Reject"
+
+profiles:
+  title: "Profiles"
+  compile_failed: "Last profile compile failed"
+  empty:
+    title: "No profiles configured"
+    desc: "Import a local or remote YAML profile through verve-core to compile and activate it."
+  source_local: "Local · %{file}"
+  source_remote: "Remote · %{url}"
+  details_btn: "Details"
+  activate_btn: "Activate"
+  status:
+    active: "Active"
+    inactive: "Inactive"
+  sheet:
+    title: "Profile: %{name}"
+    profile_id: "Profile ID"
+    status: "Status"
+    source: "Source"
+    source_local: "Local YAML"
+    source_remote: "Remote (%{url}, interval: %{mins}m)"
+    yaml_file: "YAML File"
+    merge_override: "Merge Override"
+    script_override: "Script Override"
+    no_usage: "No subscription usage metadata stored in state.db."
+    recorded_usage: "Recorded traffic: %{down} down / %{up} up"
+
+activity:
+  title: "Activity"
+  tabs_label: "Activity views"
+  refresh_rules: "Refresh Rules"
+  tab:
+    connections: "Connections"
+    rules: "Rules"
+    logs: "Logs"
+  connections:
+    empty_title: "No active connections"
+    empty_desc: "Live connections tracked by the running kernel appear here while this tab is open."
+    card_title: "Active Connections"
+    card_subtitle: "%{count} tracked connection(s)"
+  rules:
+    empty_title: "No rules loaded"
+    empty_desc: "Start the kernel and refresh rules to inspect active routing rules."
+    card_title: "Routing Rules"
+    card_subtitle: "%{rules} rule(s) · %{providers} provider(s)"
+  logs:
+    empty_title: "No kernel logs yet"
+    empty_desc: "Structured logs stream here on demand while the Logs tab is selected."
+    card_title: "Kernel Logs"
+    card_subtitle: "%{count} buffered line(s)"
+
+settings:
+  title: "Settings"
+  appearance:
+    title: "Appearance & Language"
+    subtitle: "Material 3 dynamic color palette, theme mode, and UI language"
+  theme_mode_label: "Theme mode"
+  theme:
+    light: "Light"
+    dark: "Dark"
+    system: "System"
+  language_label: "Language"
+  locale:
+    zh_cn: "简体中文"
+    en_us: "English"
+  network:
+    title: "Network & Inbound"
+    subtitle: "Persisted syncable network preferences (settings.toml)"
+    allow_lan: "Allow LAN"
+    ipv6: "IPv6"
+    log_level: "Log Level"
+    bypass: "System Proxy Bypass"
+    default_bypass: "Default bypass rules"
+  machine:
+    title: "Machine & Service"
+    subtitle: "Local machine settings (local.toml)"
+    service_mode: "Service Mode"
+    service_disabled: "Disabled (Direct)"
+    tun_interface: "TUN Interface"
+    tun_auto: "Auto"
+    auto_launch: "Auto Launch"

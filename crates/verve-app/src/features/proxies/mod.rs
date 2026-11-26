@@ -11,7 +11,7 @@ use gpui_material::{
 };
 use gpui_material_symbols::Symbol;
 use verve_core::DomainKind;
-use verve_core::kernel::ProxyMode;
+use verve_core::kernel::{ProxyGroupKind, ProxyMode};
 use verve_ui_kit::{EmptyState, LatencyBadge, SectionCard, theme_tokens};
 
 use crate::bridge::{CommandDispatcher, DomainChanged, UiStore};
@@ -36,7 +36,10 @@ impl ProxiesView {
         cx: &mut Context<Self>,
     ) -> Self {
         let store_sub = cx.subscribe(&store, |_, _, ev: &DomainChanged, cx| {
-            if matches!(ev.0, DomainKind::Runtime | DomainKind::Proxies) {
+            if matches!(
+                ev.0,
+                DomainKind::Runtime | DomainKind::Proxies | DomainKind::Settings
+            ) {
                 cx.notify();
             }
         });
@@ -64,11 +67,11 @@ impl Render for ProxiesView {
         let mode_commands = self.commands.clone();
         let mode_bar = ButtonGroup::connected(
             "proxies-mode-bar",
-            "Proxy routing mode",
+            rust_i18n::t!("common.proxy_mode_label").into_owned(),
             [
-                ButtonGroupItem::new("rule", "Rule"),
-                ButtonGroupItem::new("global", "Global"),
-                ButtonGroupItem::new("direct", "Direct"),
+                ButtonGroupItem::new("rule", rust_i18n::t!("mode.rule").into_owned()),
+                ButtonGroupItem::new("global", rust_i18n::t!("mode.global").into_owned()),
+                ButtonGroupItem::new("direct", rust_i18n::t!("mode.direct").into_owned()),
             ],
         )
         .selection(ButtonGroupSelection::SingleRequired, [selected_mode.into()])
@@ -84,10 +87,13 @@ impl Render for ProxiesView {
         });
 
         let refresh_commands = self.commands.clone();
-        let refresh_btn = Button::new("proxies-refresh", "Refresh")
-            .variant(ButtonVariant::Outlined)
-            .leading_icon(symbol_icon(Symbol::REFRESH))
-            .on_activate(move |_, _| refresh_commands.refresh_proxies());
+        let refresh_btn = Button::new(
+            "proxies-refresh",
+            rust_i18n::t!("common.refresh").into_owned(),
+        )
+        .variant(ButtonVariant::Outlined)
+        .leading_icon(symbol_icon(Symbol::REFRESH))
+        .on_activate(move |_, _| refresh_commands.refresh_proxies());
 
         let mut root = div()
             .id("proxies-page")
@@ -111,7 +117,7 @@ impl Render for ProxiesView {
                             .text_xl()
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(tokens.on_surface)
-                            .child("Proxies"),
+                            .child(rust_i18n::t!("proxies.title").into_owned()),
                     )
                     .child(
                         div()
@@ -126,19 +132,22 @@ impl Render for ProxiesView {
 
         if runtime.proxy_mode == ProxyMode::Direct {
             return root.child(EmptyState::new(
-                "Direct Mode Active",
-                "All connections bypass proxy selectors while routing mode is set to Direct.",
+                rust_i18n::t!("proxies.direct_empty.title").into_owned(),
+                rust_i18n::t!("proxies.direct_empty.desc").into_owned(),
             ));
         }
 
         let visible_groups: Vec<_> = proxies.groups.iter().filter(|g| !g.hidden).collect();
         if visible_groups.is_empty() {
             let desc = if runtime.kernel_running {
-                "No proxy groups returned by the kernel yet. Try refreshing."
+                rust_i18n::t!("proxies.empty.running_desc").into_owned()
             } else {
-                "Start the proxy kernel to load groups and switch outbound nodes."
+                rust_i18n::t!("proxies.empty.stopped_desc").into_owned()
             };
-            return root.child(EmptyState::new("No proxy groups loaded", desc));
+            return root.child(EmptyState::new(
+                rust_i18n::t!("proxies.empty.title").into_owned(),
+                desc,
+            ));
         }
 
         for group in visible_groups {
@@ -149,7 +158,9 @@ impl Render for ProxiesView {
             for (idx, member) in group.all.iter().enumerate() {
                 let is_selected = active_now.as_deref() == Some(member.as_str());
                 let node_meta = proxies.nodes.get(member);
-                let protocol = node_meta.map_or("group", |n| n.protocol.as_str());
+                let protocol = node_meta
+                    .map(|n| n.protocol.clone())
+                    .unwrap_or_else(|| rust_i18n::t!("proxies.protocol_group").into_owned());
                 let delay = node_meta.and_then(|n| n.latest_delay_ms);
                 let udp = node_meta.is_some_and(|n| n.udp);
 
@@ -217,15 +228,17 @@ impl Render for ProxiesView {
                             .justify_between()
                             .child(div().text_xs().text_color(tokens.on_surface_variant).child(
                                 if udp {
-                                    format!("{protocol} · UDP")
+                                    rust_i18n::t!("proxies.protocol_udp", protocol = protocol)
+                                        .into_owned()
                                 } else {
-                                    protocol.to_owned()
+                                    protocol
                                 },
                             ))
                             .child(
                                 IconButton::new(
                                     ("proxy-probe", idx),
-                                    format!("Probe {member}"),
+                                    rust_i18n::t!("proxies.probe_tooltip", node = member)
+                                        .into_owned(),
                                     symbol_icon(Symbol::SPEED),
                                 )
                                 .on_activate(move |_, _| {
@@ -241,11 +254,24 @@ impl Render for ProxiesView {
                 grid = grid.child(card);
             }
 
-            let subtitle = format!(
-                "{:?} · Current: {}",
-                group.kind,
-                active_now.as_deref().unwrap_or("--")
-            );
+            let kind_label = match &group.kind {
+                ProxyGroupKind::Select => rust_i18n::t!("proxies.kind.select").into_owned(),
+                ProxyGroupKind::UrlTest => rust_i18n::t!("proxies.kind.url_test").into_owned(),
+                ProxyGroupKind::Fallback => rust_i18n::t!("proxies.kind.fallback").into_owned(),
+                ProxyGroupKind::LoadBalance => {
+                    rust_i18n::t!("proxies.kind.load_balance").into_owned()
+                }
+                ProxyGroupKind::Relay => rust_i18n::t!("proxies.kind.relay").into_owned(),
+                ProxyGroupKind::Direct => rust_i18n::t!("proxies.kind.direct").into_owned(),
+                ProxyGroupKind::Reject => rust_i18n::t!("proxies.kind.reject").into_owned(),
+                ProxyGroupKind::Unknown(other) => other.clone(),
+            };
+            let subtitle = rust_i18n::t!(
+                "proxies.group_subtitle",
+                kind = kind_label,
+                current = active_now.as_deref().unwrap_or("--")
+            )
+            .into_owned();
             root = root.child(
                 SectionCard::new()
                     .title(group_name)

@@ -20,10 +20,10 @@ Verve 是一款基于 **Rust** 与 **GPUI (`gpui-material`)** 构建的跨平台
 | 目标版本 | 交付范围 |
 | --- | --- |
 | `0.0.1` | Workspace 骨架与无头内核闭环（`verve-config`、`verve-kernel`、`verve-kernel-mihomo`、`verve-compiler` Merge 与预检、`verve-core`）。 |
-| `0.0.2` | 原生 UI 底座（`verve-ui-kit`）、系统集成（`verve-sys`）、特权守护进程（`verve-service`）以及 `verve-app` 壳层、托盘与 `UiStore` 桥接。 |
+| `0.0.2` | 原生 UI 底座（`verve-ui-kit`）、系统集成（`verve-sys`）、特权守护进程（`verve-service`）以及 `verve-app` 壳层、托盘、`UiStore` 桥接与 `rust-i18n` 中英双语本地化（`zh-CN` / `en-US`）。 |
 | **`0.0.3`** | **首个达到日常主力可用的里程碑（P0 刚需核心）**：概览、代理、配置、网络与基础设置、系统代理与 TUN 接管，可独立承担日常代理上网。 |
 | `0.0.4` | 原生 `verve-editor`（YAML/JS 高亮、静态补全与预检诊断）、QuickJS 覆写沙箱、活动中心（连接监控与右键一键加规则、规则、日志）与 Providers 管理。 |
-| `0.0.5` | `verve-sync`（本地加密归档与 WebDAV 同步）、DNS 覆写双模式、GeoData 更新、多语言（中/英）与完整设置项。 |
+| `0.0.5` | `verve-sync`（本地加密归档与 WebDAV 同步）、DNS 覆写双模式、GeoData 更新与完整设置项。 |
 | `0.0.6` | 全局快捷键、出口 IP 按需检测、可选外部 TCP 控制、脱敏诊断包导出及三端体验与性能深度打磨。 |
 | **`0.1.0`** | **首个稳定契约与三端正式发布版**：锁定 `verve-config` 配置向前迁移保障、冻结 `verve-protocol` v1 IPC 稳定契约，并完善三端签名与自动化发布流水线。 |
 

@@ -1,0 +1,189 @@
+_version: 1
+
+common:
+  cancel: "取消"
+  close: "关闭"
+  refresh: "刷新"
+  download: "下载"
+  upload: "上传"
+  none: "无"
+  enabled: "已开启"
+  disabled: "已关闭"
+  mixed_port: "混合端口"
+  proxy_mode_label: "代理路由模式"
+
+mode:
+  rule: "规则"
+  global: "全局"
+  direct: "直连"
+
+nav:
+  overview: "概览"
+  proxies: "代理"
+  profiles: "配置"
+  activity: "活动"
+  settings: "设置"
+
+shell:
+  primary_nav: "主导航栏"
+  expand_nav: "展开导航栏"
+  collapse_nav: "收起导航栏"
+  switch_to_light: "切换至浅色模式"
+  switch_to_dark: "切换至深色模式"
+  health:
+    running: "内核运行中 · :%{port}"
+    running_short: "运行中"
+    stopped: "内核未运行"
+    fault: "内核异常"
+  telemetry:
+    ram: "内存 %{value}"
+
+tray:
+  show_window: "显示 Verve"
+  hide_window: "隐藏 Verve"
+  mode_rule: "模式：规则"
+  mode_global: "模式：全局"
+  mode_direct: "模式：直连"
+  system_proxy: "系统代理"
+  tun_mode: "TUN 模式"
+  quit: "退出"
+
+overview:
+  title: "概览"
+  pid: "PID %{pid}"
+  start_kernel: "启动内核"
+  stop_kernel: "停止内核"
+  network_card:
+    title: "网络接管与模式"
+    subtitle: "路由策略、系统代理接管与内核生命周期"
+  system_proxy:
+    title: "系统代理"
+    supporting: "通过 127.0.0.1:%{port} 接管系统 HTTP/SOCKS 流量"
+  tun:
+    title: "TUN 模式"
+    supporting_service: "已启用特权服务模式以接管 TUN 流量"
+    supporting_direct: "无特权直连模式（可在本地配置中开启服务模式以使用 TUN）"
+  profile_card:
+    title: "当前配置"
+    no_quota: "暂无远程订阅流量记录"
+    usage: "下行 %{down} · 上行 %{up}"
+    manage: "管理"
+    metric_profile: "配置名称"
+    metric_count: "已注册配置"
+    empty_title: "尚未激活配置"
+    empty_desc: "请选择或导入配置文件以编译运行时配置。"
+    open_profiles: "打开配置"
+  traffic_card:
+    title: "实时流量"
+    subtitle: "实时内核吞吐速率与内存占用"
+    window_label: "流量图表时间窗口"
+    window_1m: "1 分钟"
+    window_5m: "5 分钟"
+    download: "下载速率"
+    upload: "上传速率"
+    total_down: "累计下载"
+    total_up: "累计上传"
+    memory: "内核内存"
+
+proxies:
+  title: "代理"
+  direct_empty:
+    title: "当前处于直连模式"
+    desc: "路由模式设为直连时，所有连接将绕过代理策略组。"
+  empty:
+    title: "暂无代理组"
+    running_desc: "内核尚未返回代理组，请尝试刷新。"
+    stopped_desc: "请先启动代理内核以加载策略组并切换出口节点。"
+  protocol_group: "策略组"
+  protocol_udp: "%{protocol} · UDP"
+  probe_tooltip: "测速 %{node}"
+  group_subtitle: "%{kind} · 当前：%{current}"
+  kind:
+    select: "手动选择"
+    url_test: "自动测速"
+    fallback: "故障转移"
+    load_balance: "负载均衡"
+    relay: "链式代理"
+    direct: "直连"
+    reject: "拒绝"
+
+profiles:
+  title: "配置"
+  compile_failed: "上次配置编译失败"
+  empty:
+    title: "暂无配置文件"
+    desc: "请通过本地或远程 YAML 订阅导入配置以编译并激活。"
+  source_local: "本地 · %{file}"
+  source_remote: "远程 · %{url}"
+  details_btn: "详情"
+  activate_btn: "激活"
+  status:
+    active: "已激活"
+    inactive: "未激活"
+  sheet:
+    title: "配置：%{name}"
+    profile_id: "配置 ID"
+    status: "状态"
+    source: "来源"
+    source_local: "本地 YAML"
+    source_remote: "远程（%{url}，更新间隔：%{mins} 分钟）"
+    yaml_file: "YAML 文件"
+    merge_override: "Merge 覆写"
+    script_override: "Script 覆写"
+    no_usage: "state.db 中暂无订阅流量记录。"
+    recorded_usage: "已记录流量：下行 %{down} / 上行 %{up}"
+
+activity:
+  title: "活动"
+  tabs_label: "活动视图"
+  refresh_rules: "刷新规则"
+  tab:
+    connections: "连接"
+    rules: "规则"
+    logs: "日志"
+  connections:
+    empty_title: "暂无活跃连接"
+    empty_desc: "打开此标签页时，运行中的内核实时连接将显示在此处。"
+    card_title: "活跃连接"
+    card_subtitle: "%{count} 条追踪中的连接"
+  rules:
+    empty_title: "暂无已加载规则"
+    empty_desc: "启动内核并刷新规则即可查看当前生效的路由规则。"
+    card_title: "路由规则"
+    card_subtitle: "%{rules} 条规则 · %{providers} 个规则集"
+  logs:
+    empty_title: "暂无内核日志"
+    empty_desc: "选中日志标签页时，结构化内核日志将按需实时流式呈现。"
+    card_title: "内核日志"
+    card_subtitle: "已缓存 %{count} 行"
+
+settings:
+  title: "设置"
+  appearance:
+    title: "常规与外观"
+    subtitle: "Material 3 主题配色方案、外观模式与界面语言"
+  theme_mode_label: "主题模式"
+  theme:
+    light: "浅色"
+    dark: "深色"
+    system: "跟随系统"
+  language_label: "界面语言"
+  locale:
+    zh_cn: "简体中文"
+    en_us: "English"
+  network:
+    title: "网络与入站"
+    subtitle: "可同步网络配置 (settings.toml)"
+    allow_lan: "允许局域网"
+    ipv6: "IPv6"
+    log_level: "日志等级"
+    bypass: "系统代理绕过"
+    default_bypass: "默认绕过规则"
+  machine:
+    title: "本机与服务"
+    subtitle: "本机独占配置 (local.toml)"
+    service_mode: "服务模式"
+    service_disabled: "已关闭（直连）"
+    tun_interface: "TUN 网卡名称"
+    tun_auto: "自动"
+    auto_launch: "开机自启"

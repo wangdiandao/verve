@@ -120,16 +120,7 @@ impl SyncableConfig {
         self.proxy_mode = normalize_proxy_mode(&self.proxy_mode)?;
         self.log_level = normalize_log_level(&self.log_level)?;
         self.theme_mode = normalize_theme_mode(&self.theme_mode)?;
-
-        let trimmed_locale = self.locale.trim();
-        if trimmed_locale.is_empty() {
-            return Err(ConfigError::InvalidField {
-                field: "locale",
-                value: self.locale.clone(),
-                reason: "locale must not be empty".into(),
-            });
-        }
-        self.locale = trimmed_locale.to_owned();
+        self.locale = normalize_locale(&self.locale)?;
 
         for profile in &self.profiles {
             if profile.id.trim().is_empty() {
@@ -207,6 +198,20 @@ fn normalize_theme_mode(raw: &str) -> Result<String, ConfigError> {
             field: "theme_mode",
             value: raw.to_owned(),
             reason: "expected one of \"system\", \"light\", or \"dark\"".into(),
+        }),
+    }
+}
+
+/// Normalizes and validates a UI locale tag (`"zh-CN"` or `"en-US"`).
+pub fn normalize_locale(raw: &str) -> Result<String, ConfigError> {
+    let normalized = raw.trim().to_ascii_lowercase().replace('_', "-");
+    match normalized.as_str() {
+        "zh" | "zh-cn" => Ok("zh-CN".to_owned()),
+        "en" | "en-us" => Ok("en-US".to_owned()),
+        _ => Err(ConfigError::InvalidField {
+            field: "locale",
+            value: raw.to_owned(),
+            reason: "expected \"zh-CN\" or \"en-US\"".into(),
         }),
     }
 }

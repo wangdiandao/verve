@@ -20,10 +20,10 @@ Development proceeds strictly by semantic milestones rather than abstract phases
 | Target Version | Scope |
 | --- | --- |
 | `0.0.1` | Workspace skeleton and headless kernel loop (`verve-config`, `verve-kernel`, `verve-kernel-mihomo`, `verve-compiler` Merge + preflight, `verve-core`). |
-| `0.0.2` | Native UI kit (`verve-ui-kit`), OS integration (`verve-sys`), privileged supervisor (`verve-service`), and `verve-app` shell + tray + `UiStore` bridge. |
+| `0.0.2` | Native UI kit (`verve-ui-kit`), OS integration (`verve-sys`), privileged supervisor (`verve-service`), and `verve-app` shell + tray + `UiStore` bridge + `rust-i18n` bilingual localization (`zh-CN` / `en-US`). |
 | **`0.0.3`** | **First daily-usable milestone (P0 core):** Overview, Proxies, Profiles, essential Network & Appearance Settings, system proxy, and TUN mode. |
 | `0.0.4` | Native `verve-editor` (YAML/JS + diagnostics), QuickJS override sandbox, Activity center (Connections + one-click Add Rule, Rules, Logs), and Proxy/Rule Providers. |
-| `0.0.5` | `verve-sync` (local encrypted archive & WebDAV), DNS override dual-mode, GeoData updates, i18n (`zh-CN` / `en-US`), and full Settings coverage. |
+| `0.0.5` | `verve-sync` (local encrypted archive & WebDAV), DNS override dual-mode, GeoData updates, and full Settings coverage. |
 | `0.0.6` | Global hotkeys, on-demand exit IP lookup, external TCP controller (opt-in), sanitized diagnostics export, and cross-platform polish. |
 | **`0.1.0`** | **First public stable contract & multi-platform release:** Freeze `verve-config` forward migration guarantees, lock `verve-protocol` v1 IPC stability, and finalize signed three-platform automated GitHub Releases. |
 

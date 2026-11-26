@@ -75,7 +75,7 @@ impl ConfirmDialogSpec {
             title: title.into(),
             description: description.into(),
             confirm_label: confirm_label.into(),
-            cancel_label: "Cancel".into(),
+            cancel_label: rust_i18n::t!("common.cancel").into_owned().into(),
             destructive: false,
             on_confirm: Rc::new(on_confirm),
         }
@@ -152,6 +152,7 @@ impl Render for SideSheetHost {
         .mode(SheetMode::Modal)
         .placement(SheetPlacement::Docked)
         .extent(width)
+        .close_label(rust_i18n::t!("common.close").into_owned())
         .on_closed(move |_, _, cx| {
             let _ = weak.update(cx, |host, cx| {
                 host.active = None;

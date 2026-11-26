@@ -130,6 +130,13 @@ impl CommandDispatcher {
         );
     }
 
+    /// Persists `syncable.locale` (`"zh-CN"` or `"en-US"`).
+    pub fn set_locale(&self, locale: impl Into<String>) {
+        let bus = self.bus.clone();
+        let locale = locale.into();
+        self.spawn_unit("set_locale", async move { bus.set_locale(locale).await });
+    }
+
     /// Refreshes active routing rules and rule providers into `ActivitySlice`.
     pub fn refresh_rules(&self) {
         let bus = self.bus.clone();
