@@ -2,13 +2,14 @@
 //! presets & custom HEX input, UI language selector, and OS login auto-launch.
 
 use gpui::{
-    Context, FontWeight, InteractiveElement, IntoElement, ParentElement, SharedString,
-    StatefulInteractiveElement, Styled, div, prelude::FluentBuilder, px,
+    Context, FontWeight, InteractiveElement, IntoElement, ParentElement, SharedString, Styled, div,
+    prelude::FluentBuilder, px,
 };
 use gpui_material::foundation::color as argb_to_hsla;
 use gpui_material::theme::Argb;
 use gpui_material::{
-    Button, ButtonGroup, ButtonGroupItem, ButtonGroupSelection, SwitchTile, TextField,
+    Button, ButtonGroup, ButtonGroupItem, ButtonGroupSelection, ChipGroup, ChipGroupItem,
+    ChipGroupSelection, SwitchTile, TextField,
 };
 use gpui_material_symbols::Symbol;
 use verve_ui_kit::{
@@ -83,78 +84,64 @@ impl SettingsView {
             }
         });
 
-        let mut swatch_row = div()
-            .id("settings-seed-swatches")
-            .flex()
-            .flex_row()
-            .flex_wrap()
-            .items_center()
-            .gap(px(12.0));
+        let active_preset_id = SEED_COLOR_PRESETS
+            .iter()
+            .find(|preset| preset.argb == active_seed)
+            .map(|preset| preset.id);
 
-        for preset in SEED_COLOR_PRESETS {
-            let is_selected = preset.argb == active_seed;
-            let swatch_color = argb_to_hsla(Argb::from_u32(preset.argb));
-            let label = preset_localized_label(preset);
-            let preset_argb = preset.argb;
-            let weak = cx.weak_entity();
-
-            let circle = div()
-                .size(px(34.0))
-                .rounded_full()
-                .bg(swatch_color)
-                .flex()
-                .items_center()
-                .justify_center()
-                .when(is_selected, |el| {
-                    el.child(
-                        div()
-                            .size(px(18.0))
-                            .text_color(gpui::white())
-                            .child(symbol_icon(Symbol::CHECK)),
-                    )
-                });
-
-            let ring = div()
-                .p(px(3.0))
-                .rounded_full()
-                .border_2()
-                .border_color(if is_selected {
-                    tokens.primary
-                } else {
-                    gpui::transparent_black()
-                })
-                .child(circle);
-
-            swatch_row = swatch_row.child(
-                div()
-                    .id(SharedString::from(format!(
-                        "settings-seed-preset-{}",
-                        preset.id
-                    )))
-                    .cursor_pointer()
+        let swatch_items: Vec<ChipGroupItem> = SEED_COLOR_PRESETS
+            .iter()
+            .map(|preset| {
+                let is_selected = preset.argb == active_seed;
+                let swatch_color = argb_to_hsla(Argb::from_u32(preset.argb));
+                let swatch_dot = div()
+                    .size(px(18.0))
+                    .rounded_full()
+                    .bg(swatch_color)
+                    .border_1()
+                    .border_color(if is_selected {
+                        tokens.on_secondary_container.opacity(0.25)
+                    } else {
+                        tokens.outline_variant
+                    })
                     .flex()
-                    .flex_col()
                     .items_center()
-                    .gap(px(4.0))
-                    .child(ring)
-                    .child(
-                        div()
-                            .text_xs()
-                            .text_color(if is_selected {
-                                tokens.primary
-                            } else {
-                                tokens.on_surface_variant
-                            })
-                            .when(is_selected, |el| el.font_weight(FontWeight::SEMIBOLD))
-                            .child(label),
-                    )
-                    .on_click(move |_, window, cx| {
-                        let _ = weak.update(cx, |this, cx| {
-                            this.apply_seed_color(Some(preset_argb), window, cx);
-                        });
-                    }),
-            );
-        }
+                    .justify_center()
+                    .when(is_selected, |el| {
+                        el.child(
+                            symbol_icon(Symbol::CHECK)
+                                .size(px(12.0))
+                                .color_override(gpui::white()),
+                        )
+                    });
+
+                ChipGroupItem::new(preset.id, preset_localized_label(preset))
+                    .leading_icon(swatch_dot)
+            })
+            .collect();
+
+        let swatch_view = cx.weak_entity();
+        let swatch_row = ChipGroup::new(
+            "settings-seed-swatches",
+            rust_i18n::t!("settings.accent.label").into_owned(),
+            swatch_items,
+        )
+        .selection(
+            ChipGroupSelection::SingleRequired,
+            active_preset_id.into_iter().map(SharedString::from),
+        )
+        .on_change(move |selected, window, cx| {
+            if let Some(first) = selected.first()
+                && let Some(preset) = SEED_COLOR_PRESETS
+                    .iter()
+                    .find(|preset| preset.id == first.as_ref())
+            {
+                let preset_argb = preset.argb;
+                let _ = swatch_view.update(cx, |this, cx| {
+                    this.apply_seed_color(Some(preset_argb), window, cx);
+                });
+            }
+        });
 
         let mut hex_field = TextField::outlined(
             "settings-custom-seed-hex",

@@ -7,11 +7,13 @@ mod network;
 use gpui::{
     App, AppContext, Context, Entity, Focusable, FontWeight, InteractiveElement, IntoElement,
     ParentElement, Render, ScrollHandle, SharedString, StatefulInteractiveElement, Styled,
-    Subscription, Window, WindowAppearance, div, prelude::FluentBuilder, px,
+    Subscription, Window, WindowAppearance, div, px,
 };
+use gpui_material::theme::{CornerShape, LogicalEdges};
 use gpui_material::{
-    ButtonGroup, ButtonGroupItem, ButtonGroupSelection, TextAreaState, TextFieldEvent,
-    TextFieldState,
+    ButtonGroup, ButtonGroupItem, ButtonGroupSelection, NavigationItem, NavigationItems,
+    NavigationRail, NavigationRailColors, NavigationRailShapes, RailMode, TextAreaState,
+    TextFieldEvent, TextFieldState,
 };
 use gpui_material_symbols::Symbol;
 use verve_core::config::TunConfig;
@@ -817,80 +819,52 @@ impl SettingsView {
 
     fn render_category_rail(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let tokens = theme_tokens(cx);
-        let active = self.active_category;
+        let weak = cx.weak_entity();
+        let items: Vec<NavigationItem> = SettingsCategory::ALL
+            .iter()
+            .map(|&category| {
+                NavigationItem::new(category.id_str(), category.localized_label())
+                    .icon(symbol_icon(category.symbol()).size(px(20.0)))
+                    .indicator_padding(LogicalEdges::ZERO, LogicalEdges::symmetric(12.0, 0.0))
+            })
+            .collect();
 
-        let mut rail = div()
+        let nav_items = NavigationItems::new(
+            "settings-category-nav",
+            rust_i18n::t!("settings.category_nav_label").into_owned(),
+            items,
+        )
+        .selected(self.active_category.id_str())
+        .on_select(move |id, _, cx| {
+            if let Some(category) = SettingsCategory::from_id_str(id.as_ref()) {
+                let _ = weak.update(cx, |this, cx| {
+                    this.select_category(category, cx);
+                });
+            }
+        });
+
+        div()
             .id("settings-category-rail")
-            .w(px(200.0))
-            .flex_none()
             .h_full()
-            .p(px(16.0))
+            .flex_none()
             .border_r_1()
             .border_color(tokens.outline_variant)
-            .flex()
-            .flex_col()
-            .gap(px(6.0))
             .child(
-                div()
-                    .px(px(8.0))
-                    .pb(px(10.0))
-                    .text_xl()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(tokens.on_surface)
-                    .child(rust_i18n::t!("settings.title").into_owned()),
-            );
-
-        for category in SettingsCategory::ALL {
-            let is_selected = category == active;
-            let weak = cx.weak_entity();
-            let bg = if is_selected {
-                tokens.secondary_container
-            } else {
-                gpui::transparent_black()
-            };
-            let fg = if is_selected {
-                tokens.on_secondary_container
-            } else {
-                tokens.on_surface_variant
-            };
-            let hover_bg = if is_selected {
-                tokens.secondary_container
-            } else {
-                tokens.surface_container_high
-            };
-
-            rail = rail.child(
-                div()
-                    .id(SharedString::from(format!(
-                        "settings-cat-{}",
-                        category.id_str()
-                    )))
-                    .w_full()
-                    .px(px(12.0))
-                    .py(px(10.0))
-                    .rounded(px(12.0))
-                    .bg(bg)
-                    .hover(move |style| style.bg(hover_bg))
-                    .cursor_pointer()
-                    .flex()
-                    .flex_row()
-                    .items_center()
-                    .gap(px(10.0))
-                    .text_sm()
-                    .text_color(fg)
-                    .when(is_selected, |el| el.font_weight(FontWeight::SEMIBOLD))
-                    .when(!is_selected, |el| el.font_weight(FontWeight::MEDIUM))
-                    .child(div().size(px(18.0)).child(symbol_icon(category.symbol())))
-                    .child(category.localized_label())
-                    .on_click(move |_, _, cx| {
-                        let _ = weak.update(cx, |this, cx| {
-                            this.select_category(category, cx);
-                        });
+                NavigationRail::new("settings-category-rail-inner", nav_items)
+                    .mode(RailMode::Expanded)
+                    .expanded_width(px(220.0))
+                    .content_padding(LogicalEdges::new(16.0, 8.0, 16.0, 8.0))
+                    .header_spacing(px(10.0))
+                    .title(rust_i18n::t!("settings.title").into_owned())
+                    .colors(NavigationRailColors {
+                        container: Some(tokens.surface),
+                        ..Default::default()
+                    })
+                    .shapes(NavigationRailShapes {
+                        expanded: Some(CornerShape::Radii([0.0; 4])),
+                        ..Default::default()
                     }),
-            );
-        }
-
-        rail
+            )
     }
 
     fn render_narrow_header(&self, cx: &mut Context<Self>) -> impl IntoElement {
