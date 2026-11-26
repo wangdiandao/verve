@@ -132,17 +132,38 @@ overview:
 
 proxies:
   title: "代理"
+  search_label: "搜索节点或协议"
+  search_placeholder: "搜索节点名称或协议…"
+  clear_search: "清空搜索"
+  test_all: "全组测速"
+  testing_all_toast: "正在测速全部代理组…"
+  testing_group_toast: "正在测速代理组「%{group}」…"
+  located_toast: "已定位到「%{group}」的当前节点：%{node}"
   direct_empty:
     title: "当前处于直连模式"
     desc: "路由模式设为直连时，所有连接将绕过代理策略组。"
+    switch_rule: "切换为规则模式"
   empty:
     title: "暂无代理组"
     running_desc: "内核尚未返回代理组，请尝试刷新。"
     stopped_desc: "请先启动代理内核以加载策略组并切换出口节点。"
+    start_kernel: "启动内核"
+  search_empty:
+    title: "未找到匹配的节点"
+    desc: "没有与「%{query}」匹配的节点或协议。"
   protocol_group: "策略组"
   protocol_udp: "%{protocol} · UDP"
   probe_tooltip: "测速 %{node}"
+  locate_tooltip: "定位当前选中节点"
+  test_group_tooltip: "测速分组 %{group}"
   group_subtitle: "%{kind} · 当前：%{current}"
+  group_current: "当前：%{current}"
+  group_count_filtered: "%{visible} / %{total}"
+  sort_label: "节点排序方式"
+  sort:
+    default: "默认"
+    latency: "延迟"
+    name: "名称"
   kind:
     select: "手动选择"
     url_test: "自动测速"
