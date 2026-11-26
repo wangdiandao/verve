@@ -4,6 +4,8 @@ See [versioning and releases](docs/release.md) for the version progression polic
 
 ## Unreleased
 
+## 0.0.3 - 2026-11-26
+
 ### Core & Kernel
 
 - Added `TunConfig` (`stack`, `auto_route`, `strict_route`, `dns_hijack`, `mtu`, `route_exclude_address`), `theme_seed_color`, and `default_delay_test_url` to `SyncableConfig` with backwards-compatible TOML deserialization, validation, and safe `ConfigManager::remove_profile_files`.
@@ -16,6 +18,10 @@ See [versioning and releases](docs/release.md) for the version progression polic
 
 ### UI & UX
 
+- Implemented the **Overview** dashboard (`verve-app`) with responsive two-column master controls (routing mode, system proxy, and privileged TUN), active profile quota/expiry summary and quick outbound node switcher, copyable terminal proxy command bar (`PowerShell`, `Bash`, `Zsh`, `Fish`, `CMD`), live GPU Canvas traffic chart, and kernel version/uptime/restart status bar.
+- Implemented the **Proxies** view (`verve-app`) with routing mode selector, global node search, collapsible proxy groups, per-group sorting (`Default`, `Latency`, `Name`), active-node locate, single & batch latency probing, and an adaptive multi-column node grid.
+- Implemented the **Profiles** view (`verve-app`) with remote subscription URL import, scoped local YAML creation/file import side sheet, profile cards displaying quota progress and expiration status, one-click activation, subscription refresh, detail inspection side sheet, and guarded delete confirmation.
+- Implemented the **Settings** view (`verve-app`) with responsive `Network` and `General` category forms covering `mixed-port`, Allow LAN, IPv6, system proxy bypass rules, TUN core parameters (`stack`, `mtu`, `auto-route`, `strict-route`, `dns-hijack`, `route-exclude-address`), privileged service mode & actions, theme mode & dynamic Material 3 accent seed colors (presets + custom hex), live language switching, and OS login auto-launch.
 - Replaced raw click containers for the Settings left category rail and dynamic accent seed color swatches with accessible Material 3 `NavigationRail` / `NavigationItems` and `ChipGroup` controls so all Settings navigation and theme preset controls support keyboard focus and native OS accessibility trees.
 - Added UTC date/datetime formatters (`format_unix_date`, `format_unix_datetime`), 7 Material 3 Expressive `SEED_COLOR_PRESETS`, and hex seed color parsing/formatting helpers to `verve-ui-kit`.
 - Wired `CommandDispatcher` async wrappers for all new P0 commands, dual error/info `ToastNotification` snackbar routing, dynamic `theme_seed_color` application, `ProtocolServiceIpcClient` bootstrap wiring, and shared `common.*` bilingual locale keys in `verve-app`.
