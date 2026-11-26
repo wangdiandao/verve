@@ -1,7 +1,7 @@
 //! Length-prefixed `verve-protocol` IPC client implementing [`verve_kernel::ServiceIpcClient`].
 
 use std::future::Future;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -11,7 +11,124 @@ use verve_protocol::{
     decode_frame, encode_frame,
 };
 
+use crate::error::CoreError;
+
 const FRAME_HEADER_LEN: usize = std::mem::size_of::<u32>();
+
+/// Returns the platform-native default IPC endpoint for `verve-service`.
+pub fn default_service_ipc_endpoint() -> &'static str {
+    #[cfg(windows)]
+    {
+        r"\\.\pipe\verve-service"
+    }
+    #[cfg(not(windows))]
+    {
+        "/run/verve/verve-service.sock"
+    }
+}
+
+/// Async abstraction for installing and uninstalling the privileged `verve-service` OS daemon.
+pub trait ServiceControlBackend: Send + Sync {
+    /// Installs `verve-service` with the supplied trusted binary directories.
+    fn install_service<'a>(
+        &'a self,
+        trusted_dirs: &'a [PathBuf],
+    ) -> Pin<Box<dyn Future<Output = Result<(), CoreError>> + Send + 'a>>;
+
+    /// Uninstalls `verve-service` from the host OS service manager.
+    fn uninstall_service<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<(), CoreError>> + Send + 'a>>;
+}
+
+/// Production [`ServiceControlBackend`] invoking the sibling `verve-service` executable.
+#[derive(Debug, Clone, Default)]
+pub struct OsServiceControlBackend;
+
+impl OsServiceControlBackend {
+    fn locate_service_binary() -> PathBuf {
+        let bin_name = if cfg!(windows) {
+            "verve-service.exe"
+        } else {
+            "verve-service"
+        };
+
+        if let Ok(current) = std::env::current_exe()
+            && let Some(dir) = current.parent()
+        {
+            let sibling = dir.join(bin_name);
+            if sibling.is_file() {
+                return sibling;
+            }
+        }
+
+        if let Some(paths) = std::env::var_os("PATH") {
+            for dir in std::env::split_paths(&paths) {
+                let candidate = dir.join(bin_name);
+                if candidate.is_file() {
+                    return candidate;
+                }
+            }
+        }
+
+        PathBuf::from(bin_name)
+    }
+
+    async fn run_service_cli(args: Vec<std::ffi::OsString>) -> Result<(), CoreError> {
+        let bin = Self::locate_service_binary();
+        let output = tokio::process::Command::new(&bin)
+            .args(&args)
+            .output()
+            .await
+            .map_err(|err| {
+                CoreError::Kernel(KernelError::Protocol(format!(
+                    "failed to launch `{}`: {err}",
+                    bin.display()
+                )))
+            })?;
+
+        if output.status.success() {
+            Ok(())
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
+            let stdout = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+            let detail = if !stderr.is_empty() {
+                stderr
+            } else if !stdout.is_empty() {
+                stdout
+            } else {
+                format!("exit status {}", output.status)
+            };
+            Err(CoreError::Kernel(KernelError::Protocol(format!(
+                "verve-service command failed: {detail}"
+            ))))
+        }
+    }
+}
+
+impl ServiceControlBackend for OsServiceControlBackend {
+    fn install_service<'a>(
+        &'a self,
+        trusted_dirs: &'a [PathBuf],
+    ) -> Pin<Box<dyn Future<Output = Result<(), CoreError>> + Send + 'a>> {
+        Box::pin(async move {
+            let mut args = vec![std::ffi::OsString::from("--install")];
+            for dir in trusted_dirs {
+                args.push(std::ffi::OsString::from("--trusted-dir"));
+                args.push(dir.as_os_str().to_owned());
+            }
+            Self::run_service_cli(args).await
+        })
+    }
+
+    fn uninstall_service<'a>(
+        &'a self,
+    ) -> Pin<Box<dyn Future<Output = Result<(), CoreError>> + Send + 'a>> {
+        Box::pin(async move {
+            Self::run_service_cli(vec![std::ffi::OsString::from("--uninstall")]).await
+        })
+    }
+}
 
 /// Local IPC client speaking length-prefixed `verve-protocol` v1 frames to `verve-service`.
 #[derive(Debug, Clone)]

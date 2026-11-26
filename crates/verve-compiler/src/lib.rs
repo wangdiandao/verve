@@ -8,7 +8,7 @@ mod stages;
 
 pub use model::{
     CommittedConfig, CompileContext, CompileDiagnostic, CompiledConfig, RuntimeInjectionConfig,
-    StageLog,
+    StageLog, TunInjectionConfig,
 };
 pub use pipeline::CompilerPipeline;
 pub use script::{NoopScriptEngine, SandboxLimits, ScriptEngine, ScriptOutput};
@@ -58,6 +58,7 @@ mod tests {
                 log_level: LogLevel::Info,
                 control_endpoint: ControlEndpoint::NamedPipe(r"\\.\pipe\verve-test".into()),
                 tun_enabled: false,
+                tun: TunInjectionConfig::default(),
             },
         }
     }
@@ -238,6 +239,15 @@ rules:
             log_level: LogLevel::Debug,
             control_endpoint: ControlEndpoint::NamedPipe(r"\\.\pipe\verve-mihomo-main".into()),
             tun_enabled: true,
+            tun: TunInjectionConfig {
+                stack: "gvisor".into(),
+                auto_route: true,
+                strict_route: false,
+                dns_hijack: vec!["any:53".into(), "tcp://any:53".into()],
+                mtu: 1500,
+                route_exclude_address: vec!["192.168.0.0/16".into()],
+                interface_name: Some("verve-tun0".into()),
+            },
         };
 
         let compiled = CompilerPipeline::default()
@@ -273,6 +283,16 @@ rules:
             json!(r"\\.\pipe\verve-mihomo-main")
         );
         assert_eq!(doc["tun"]["enable"], json!(true));
+        assert_eq!(doc["tun"]["stack"], json!("gvisor"));
+        assert_eq!(doc["tun"]["auto-route"], json!(true));
+        assert_eq!(doc["tun"]["strict-route"], json!(false));
+        assert_eq!(doc["tun"]["mtu"], json!(1500));
+        assert_eq!(doc["tun"]["dns-hijack"], json!(["any:53", "tcp://any:53"]));
+        assert_eq!(
+            doc["tun"]["route-exclude-address"],
+            json!(["192.168.0.0/16"])
+        );
+        assert_eq!(doc["tun"]["device"], json!("verve-tun0"));
 
         // Verify UnixSocket branch clears stale pipe field and disables tun.enable when false.
         let mut unix_ctx = base_context();

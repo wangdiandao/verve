@@ -242,14 +242,14 @@ impl CompilerStage for RuntimeInjectionStage {
         }
 
         if runtime.tun_enabled {
-            match root_map.get_mut("tun") {
-                Some(Value::Object(tun_map)) => {
-                    tun_map.insert("enable".into(), Value::Bool(true));
-                }
+            let tun_map = match root_map.get_mut("tun") {
+                Some(Value::Object(tun_map)) => tun_map,
                 None | Some(Value::Null) => {
-                    let mut tun_map = Map::new();
-                    tun_map.insert("enable".into(), Value::Bool(true));
-                    root_map.insert("tun".into(), Value::Object(tun_map));
+                    root_map.insert("tun".into(), Value::Object(Map::new()));
+                    match root_map.get_mut("tun") {
+                        Some(Value::Object(tun_map)) => tun_map,
+                        _ => unreachable!("inserted tun object"),
+                    }
                 }
                 Some(_) => {
                     return Err(CompileDiagnostic {
@@ -258,6 +258,47 @@ impl CompilerStage for RuntimeInjectionStage {
                         column: None,
                         message: "`tun` field must be a YAML mapping".into(),
                     });
+                }
+            };
+
+            tun_map.insert("enable".into(), Value::Bool(true));
+            tun_map.insert("stack".into(), Value::String(runtime.tun.stack.clone()));
+            tun_map.insert("auto-route".into(), Value::Bool(runtime.tun.auto_route));
+            tun_map.insert("strict-route".into(), Value::Bool(runtime.tun.strict_route));
+            tun_map.insert("mtu".into(), Value::Number(runtime.tun.mtu.into()));
+
+            if !runtime.tun.dns_hijack.is_empty() {
+                tun_map.insert(
+                    "dns-hijack".into(),
+                    Value::Array(
+                        runtime
+                            .tun
+                            .dns_hijack
+                            .iter()
+                            .map(|entry| Value::String(entry.clone()))
+                            .collect(),
+                    ),
+                );
+            }
+
+            if !runtime.tun.route_exclude_address.is_empty() {
+                tun_map.insert(
+                    "route-exclude-address".into(),
+                    Value::Array(
+                        runtime
+                            .tun
+                            .route_exclude_address
+                            .iter()
+                            .map(|entry| Value::String(entry.clone()))
+                            .collect(),
+                    ),
+                );
+            }
+
+            if let Some(ref name) = runtime.tun.interface_name {
+                let trimmed = name.trim();
+                if !trimmed.is_empty() {
+                    tun_map.insert("device".into(), Value::String(trimmed.to_owned()));
                 }
             }
         } else if let Some(Value::Object(tun_map)) = root_map.get_mut("tun") {

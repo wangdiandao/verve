@@ -45,6 +45,25 @@ pub struct DomainDirtyEvent {
     pub revision: Revision,
 }
 
+/// Reachability and runtime status of the privileged `verve-service` daemon.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum ServiceStatus {
+    /// Service availability has not been probed yet.
+    #[default]
+    Unknown,
+    /// Service IPC daemon responded to a status query.
+    Available {
+        /// PID of the kernel currently supervised by the service, if running.
+        running_pid: Option<u32>,
+    },
+    /// Service IPC daemon is not installed, not running, or unreachable.
+    Unavailable {
+        /// Diagnostic error detail from the most recent probe, if available.
+        reason: Option<String>,
+    },
+}
+
 /// Runtime kernel status, routing mode, and active endpoint summary slice.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RuntimeSlice {
@@ -56,6 +75,10 @@ pub struct RuntimeSlice {
     pub kernel_running: bool,
     /// OS process ID of the running kernel, if active.
     pub kernel_pid: Option<u32>,
+    /// Version string reported by the running kernel, if queried.
+    pub kernel_version: Option<String>,
+    /// Unix timestamp (in seconds) when the running kernel started, if active.
+    pub kernel_started_at_unix_secs: Option<i64>,
     /// Identifier of the currently active profile, if selected.
     pub active_profile_id: Option<String>,
     /// Display name of the currently active profile, if selected.
@@ -68,6 +91,8 @@ pub struct RuntimeSlice {
     pub tun_enabled: bool,
     /// Active control-plane IPC endpoint, if configured.
     pub control_endpoint: Option<ControlEndpoint>,
+    /// Last probed availability status of the privileged `verve-service` daemon.
+    pub service_status: ServiceStatus,
     /// Most recent runtime/lifecycle error message, if any.
     pub last_error: Option<String>,
 }
@@ -80,12 +105,15 @@ impl Default for RuntimeSlice {
             proxy_mode: ProxyMode::Rule,
             kernel_running: false,
             kernel_pid: None,
+            kernel_version: None,
+            kernel_started_at_unix_secs: None,
             active_profile_id: None,
             active_profile_name: None,
             mixed_port: defaults.mixed_port,
             system_proxy_enabled: defaults.system_proxy_enabled,
             tun_enabled: defaults.tun_enabled,
             control_endpoint: None,
+            service_status: ServiceStatus::Unknown,
             last_error: None,
         }
     }

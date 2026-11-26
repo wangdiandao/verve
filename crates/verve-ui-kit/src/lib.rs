@@ -15,11 +15,15 @@ pub use chart::{
     ChartWindow, MiniSparkline, NormalizedTrafficSeries, TrafficChart, TrafficDataPoint,
     normalize_series,
 };
-pub use format::{format_bytes, format_duration_hms, format_throughput_bps};
+pub use format::{
+    format_bytes, format_duration_hms, format_throughput_bps, format_unix_date,
+    format_unix_datetime,
+};
 pub use primitives::{EmptyState, HealthIndicator, LatencyBadge, MetricTile, SectionCard};
 pub use theme::{
-    AppearanceMode, DEFAULT_SEED_ARGB, KernelHealthState, LatencyBand, ThemeTokens, apply_theme,
-    build_material_theme, init_ui_kit, is_dark_theme, role_color, theme_tokens,
+    AppearanceMode, DEFAULT_SEED_ARGB, KernelHealthState, LatencyBand, SEED_COLOR_PRESETS,
+    ThemeSeedPreset, ThemeTokens, apply_theme, build_material_theme, format_hex_seed_color,
+    init_ui_kit, is_dark_theme, parse_hex_seed_color, role_color, theme_tokens,
 };
 
 #[cfg(test)]

@@ -45,6 +45,41 @@ pub struct StageLog {
     pub message: String,
 }
 
+/// Authoritative TUN interface settings injected by [`crate::RuntimeInjectionStage`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TunInjectionConfig {
+    /// Network stack (`"system"`, `"gvisor"`, or `"mixed"`).
+    pub stack: String,
+    /// Whether automatic route configuration is enabled (`auto-route`).
+    pub auto_route: bool,
+    /// Whether strict route enforcement is enabled (`strict-route`).
+    pub strict_route: bool,
+    /// DNS hijack patterns (`dns-hijack`).
+    pub dns_hijack: Vec<String>,
+    /// Virtual interface MTU (`mtu`).
+    pub mtu: u16,
+    /// Excluded CIDR address ranges (`route-exclude-address`).
+    pub route_exclude_address: Vec<String>,
+    /// Optional custom TUN device name (`device`).
+    pub interface_name: Option<String>,
+}
+
+impl Default for TunInjectionConfig {
+    fn default() -> Self {
+        let defaults = verve_config::TunConfig::default();
+        Self {
+            stack: defaults.stack,
+            auto_route: defaults.auto_route,
+            strict_route: defaults.strict_route,
+            dns_hijack: defaults.dns_hijack,
+            mtu: defaults.mtu,
+            route_exclude_address: defaults.route_exclude_address,
+            interface_name: None,
+        }
+    }
+}
+
 /// Runtime network and control-plane settings injected by [`crate::RuntimeInjectionStage`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RuntimeInjectionConfig {
@@ -62,6 +97,9 @@ pub struct RuntimeInjectionConfig {
     pub control_endpoint: ControlEndpoint,
     /// Whether TUN capture is enabled.
     pub tun_enabled: bool,
+    /// Detailed TUN settings injected when `tun_enabled` is `true`.
+    #[serde(default)]
+    pub tun: TunInjectionConfig,
 }
 
 /// Immutable inputs consumed across all stages of [`crate::CompilerPipeline`].

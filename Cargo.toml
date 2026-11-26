@@ -59,6 +59,7 @@ ksni = "0.3"
 libc = "0.2"
 percent-encoding = "2.3"
 postcard = { version = "1.2", features = ["alloc", "use-std"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "charset", "http2"] }
 rusqlite = { version = "0.43", features = ["bundled"] }
 rust-i18n = "4.2"
 serde = { version = "1.0", features = ["derive"] }

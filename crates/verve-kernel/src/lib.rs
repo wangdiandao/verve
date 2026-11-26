@@ -23,6 +23,11 @@ pub trait ProxyKernel: Send + Sync + 'static {
     /// Returns the static capability flags supported by this kernel adapter.
     fn capabilities(&self) -> KernelCapabilities;
 
+    /// Queries the running kernel's version string, if supported.
+    fn fetch_version(&self) -> impl Future<Output = Result<Option<String>, KernelError>> + Send {
+        async { Ok(None) }
+    }
+
     /// Runs kernel-level configuration preflight validation on `path`.
     fn validate_config(
         &self,

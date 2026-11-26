@@ -2,7 +2,9 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use crate::schema::validate_safe_file_name;
-use crate::{ConfigError, LocalMachineConfig, StateStore, SyncableConfig, atomic_write_str};
+use crate::{
+    ConfigError, LocalMachineConfig, ProfileEntry, StateStore, SyncableConfig, atomic_write_str,
+};
 
 /// Coordinates the on-disk layout of Verve's dual-domain configuration,
 /// profile/override files, compiled runtime artifacts, and SQLite metadata.
@@ -136,8 +138,35 @@ impl ConfigManager {
         atomic_write_str(&path, content)
     }
 
+    /// Safely deletes the profile YAML (`profiles/{file_name}`) and any associated
+    /// per-profile override files (`overrides/{merge_file_name}`, `overrides/{script_file_name}`),
+    /// ignoring files that do not exist.
+    pub fn remove_profile_files(&self, entry: &ProfileEntry) -> Result<(), ConfigError> {
+        let profile_path = self.profile_path(&entry.file_name)?;
+        remove_file_if_exists(&profile_path)?;
+
+        if let Some(ref merge_file) = entry.merge_file_name {
+            let merge_path = self.override_path(merge_file)?;
+            remove_file_if_exists(&merge_path)?;
+        }
+        if let Some(ref script_file) = entry.script_file_name {
+            let script_path = self.override_path(script_file)?;
+            remove_file_if_exists(&script_path)?;
+        }
+
+        Ok(())
+    }
+
     /// Opens the SQLite WAL runtime metadata store at `state.db`.
     pub fn open_state_store(&self) -> Result<StateStore, ConfigError> {
         StateStore::open(&self.state_db_path())
+    }
+}
+
+fn remove_file_if_exists(path: &Path) -> Result<(), ConfigError> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(err) if err.kind() == ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(ConfigError::Io(err)),
     }
 }

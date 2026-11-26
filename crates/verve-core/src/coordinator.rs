@@ -1,20 +1,22 @@
 //! Single-writer CQRS [`AppCoordinator`] and [`MihomoCoordinatorBuilder`].
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 use std::io::ErrorKind;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use futures_util::stream::{self, StreamExt};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use verve_compiler::{
     CommittedConfig, CompileContext, CompilerPipeline, NoopScriptEngine, RuntimeInjectionConfig,
-    ScriptEngine,
+    ScriptEngine, TunInjectionConfig,
 };
 use verve_config::{
-    ConfigError, ConfigManager, ProfileEntry, ProfileSource, StateStore, SyncableConfig,
+    ConfigError, ConfigManager, LocalMachineConfig, ProfileEntry, ProfileSource, ProfileUsage,
+    StateStore, SyncableConfig, TunConfig,
 };
 use verve_kernel::{
     ControlEndpoint, DaemonIpcSupervisor, DirectProcessSupervisor, KernelError, KernelSupervisor,
@@ -22,18 +24,26 @@ use verve_kernel::{
 };
 use verve_kernel_mihomo::{MihomoKernel, MihomoKernelConfig, discover_mihomo_binary};
 use verve_sys::{
-    InMemorySystemProxyBackend, OsSystemProxyBackend, SysError, SystemProxyBackend,
-    SystemProxyManager, SystemProxySnapshot,
+    AutoLaunchBackend, InMemoryAutoLaunchBackend, InMemorySystemProxyBackend, OsAutoLaunchBackend,
+    OsSystemProxyBackend, SysError, SystemProxyBackend, SystemProxyManager, SystemProxySnapshot,
 };
 
-use crate::commands::{AppCommand, CommandBus};
+use crate::commands::{AppCommand, CommandBus, ServiceControlAction};
 use crate::error::CoreError;
-use crate::snapshot::{AppSnapshot, ProfilesSlice, RuntimeSlice, SettingsSlice, SnapshotStore};
+use crate::service_ipc::{OsServiceControlBackend, ServiceControlBackend};
+use crate::snapshot::{
+    AppSnapshot, ProfilesSlice, RuntimeSlice, ServiceStatus, SettingsSlice, SnapshotStore,
+};
+use crate::subscription::{
+    ReqwestSubscriptionFetcher, SubscriptionFetcher, generate_profile_id, infer_profile_name,
+    validate_profile_yaml,
+};
 use crate::telemetry::{DEFAULT_LOG_CAPACITY, DEFAULT_TRAFFIC_HISTORY_CAPACITY, TelemetryHub};
 
 const DEFAULT_STARTUP_TIMEOUT: Duration = Duration::from_secs(10);
 const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_COMMAND_BUFFER_CAPACITY: usize = 64;
+const MAX_CONCURRENT_DELAY_TESTS: usize = 8;
 
 /// Configuration parameters for spawning an [`AppCoordinator`].
 #[derive(Clone)]
@@ -55,6 +65,13 @@ pub struct CoordinatorConfig {
     pub system_proxy_backend: Option<Arc<dyn SystemProxyBackend>>,
     /// Optional privileged `verve-service` IPC client used when `local.service_mode_enabled` is `true`.
     pub service_ipc_client: Option<Arc<dyn ServiceIpcClient>>,
+    /// Optional override remote subscription HTTP fetcher (defaults to [`ReqwestSubscriptionFetcher`]).
+    pub subscription_fetcher: Option<Arc<dyn SubscriptionFetcher>>,
+    /// Optional override OS login auto-launch backend (defaults to [`OsAutoLaunchBackend`]
+    /// or [`InMemoryAutoLaunchBackend`] when `VERVE_DRY_RUN_SYSPROXY=1`).
+    pub auto_launch_backend: Option<Arc<dyn AutoLaunchBackend>>,
+    /// Optional override service install/uninstall backend (defaults to [`OsServiceControlBackend`]).
+    pub service_control_backend: Option<Arc<dyn ServiceControlBackend>>,
 }
 
 impl fmt::Debug for CoordinatorConfig {
@@ -71,6 +88,18 @@ impl fmt::Debug for CoordinatorConfig {
                 &self.system_proxy_backend.is_some(),
             )
             .field("has_service_ipc_client", &self.service_ipc_client.is_some())
+            .field(
+                "has_custom_subscription_fetcher",
+                &self.subscription_fetcher.is_some(),
+            )
+            .field(
+                "has_custom_auto_launch_backend",
+                &self.auto_launch_backend.is_some(),
+            )
+            .field(
+                "has_custom_service_control_backend",
+                &self.service_control_backend.is_some(),
+            )
             .finish()
     }
 }
@@ -86,6 +115,9 @@ impl Default for CoordinatorConfig {
             log_capacity: DEFAULT_LOG_CAPACITY,
             system_proxy_backend: None,
             service_ipc_client: None,
+            subscription_fetcher: None,
+            auto_launch_backend: None,
+            service_control_backend: None,
         }
     }
 }
@@ -149,6 +181,9 @@ pub struct MihomoCoordinatorBuilder {
     log_capacity: usize,
     system_proxy_backend: Option<Arc<dyn SystemProxyBackend>>,
     service_ipc_client: Option<Arc<dyn ServiceIpcClient>>,
+    subscription_fetcher: Option<Arc<dyn SubscriptionFetcher>>,
+    auto_launch_backend: Option<Arc<dyn AutoLaunchBackend>>,
+    service_control_backend: Option<Arc<dyn ServiceControlBackend>>,
 }
 
 impl MihomoCoordinatorBuilder {
@@ -167,6 +202,9 @@ impl MihomoCoordinatorBuilder {
             log_capacity: DEFAULT_LOG_CAPACITY,
             system_proxy_backend: None,
             service_ipc_client: None,
+            subscription_fetcher: None,
+            auto_launch_backend: None,
+            service_control_backend: None,
         }
     }
 
@@ -236,6 +274,24 @@ impl MihomoCoordinatorBuilder {
         self
     }
 
+    /// Overrides the remote subscription HTTP fetcher.
+    pub fn subscription_fetcher(mut self, fetcher: Arc<dyn SubscriptionFetcher>) -> Self {
+        self.subscription_fetcher = Some(fetcher);
+        self
+    }
+
+    /// Overrides the OS login auto-launch backend.
+    pub fn auto_launch_backend(mut self, backend: Arc<dyn AutoLaunchBackend>) -> Self {
+        self.auto_launch_backend = Some(backend);
+        self
+    }
+
+    /// Overrides the OS service install/uninstall backend.
+    pub fn service_control_backend(mut self, backend: Arc<dyn ServiceControlBackend>) -> Self {
+        self.service_control_backend = Some(backend);
+        self
+    }
+
     /// Opens configuration storage, resolves the Mihomo binary, and spawns [`AppCoordinator`].
     pub fn spawn(self) -> Result<CoordinatorHandle<MihomoKernel>, CoreError> {
         let config_manager = ConfigManager::open(&self.root_dir)?;
@@ -279,6 +335,9 @@ impl MihomoCoordinatorBuilder {
             log_capacity: self.log_capacity,
             system_proxy_backend: self.system_proxy_backend,
             service_ipc_client: self.service_ipc_client,
+            subscription_fetcher: self.subscription_fetcher,
+            auto_launch_backend: self.auto_launch_backend,
+            service_control_backend: self.service_control_backend,
         };
 
         AppCoordinator::spawn(config_manager, compiler, supervisor, kernel, coord_config)
@@ -298,14 +357,26 @@ impl SystemProxyBackend for SharedSystemProxyBackend {
     }
 }
 
+fn is_dry_run_env() -> bool {
+    std::env::var_os("VERVE_DRY_RUN_SYSPROXY")
+        .is_some_and(|val| val == "1" || val.eq_ignore_ascii_case("true"))
+}
+
 fn default_system_proxy_backend() -> Arc<dyn SystemProxyBackend> {
-    let dry_run = std::env::var_os("VERVE_DRY_RUN_SYSPROXY")
-        .is_some_and(|val| val == "1" || val.eq_ignore_ascii_case("true"));
-    if dry_run {
+    if is_dry_run_env() {
         Arc::new(InMemorySystemProxyBackend::default())
     } else {
         Arc::new(OsSystemProxyBackend)
     }
+}
+
+fn default_auto_launch_backend() -> Result<Arc<dyn AutoLaunchBackend>, CoreError> {
+    if is_dry_run_env() {
+        return Ok(Arc::new(InMemoryAutoLaunchBackend::default()));
+    }
+    let exe = std::env::current_exe().map_err(|err| CoreError::Sys(SysError::Io(err)))?;
+    let backend = OsAutoLaunchBackend::new("Verve", &exe, &[])?;
+    Ok(Arc::new(backend))
 }
 
 /// Single-writer CQRS orchestrator serializing configuration, compilation, and kernel control.
@@ -313,12 +384,16 @@ pub struct AppCoordinator<K: ProxyKernel> {
     config_manager: ConfigManager,
     state_store: StateStore,
     syncable: SyncableConfig,
+    local: LocalMachineConfig,
     compiler: CompilerPipeline,
     supervisor: KernelSupervisor,
     kernel: Arc<K>,
     snapshots: Arc<SnapshotStore>,
     telemetry: TelemetryHub<K>,
     sysproxy_manager: SystemProxyManager<SharedSystemProxyBackend>,
+    subscription_fetcher: Arc<dyn SubscriptionFetcher>,
+    auto_launch_backend: Option<Arc<dyn AutoLaunchBackend>>,
+    service_control_backend: Arc<dyn ServiceControlBackend>,
     config: CoordinatorConfig,
 }
 
@@ -342,6 +417,16 @@ impl<K: ProxyKernel> AppCoordinator<K> {
             config_manager.runtime_dir(),
             SharedSystemProxyBackend(sysproxy_backend),
         );
+
+        let subscription_fetcher = config
+            .subscription_fetcher
+            .clone()
+            .unwrap_or_else(|| Arc::new(ReqwestSubscriptionFetcher::default()));
+        let auto_launch_backend = config.auto_launch_backend.clone();
+        let service_control_backend = config
+            .service_control_backend
+            .clone()
+            .unwrap_or_else(|| Arc::new(OsServiceControlBackend));
 
         match sysproxy_manager.heal_if_crashed() {
             Ok(true) => {
@@ -378,12 +463,15 @@ impl<K: ProxyKernel> AppCoordinator<K> {
                 proxy_mode: parse_proxy_mode(&syncable.proxy_mode),
                 kernel_running: supervisor.is_running(),
                 kernel_pid: supervisor.pid(),
+                kernel_version: None,
+                kernel_started_at_unix_secs: None,
                 active_profile_id: syncable.active_profile_id.clone(),
                 active_profile_name,
                 mixed_port: syncable.mixed_port,
                 system_proxy_enabled: syncable.system_proxy_enabled,
                 tun_enabled: syncable.tun_enabled,
                 control_endpoint: Some(config.control_endpoint.clone()),
+                service_status: ServiceStatus::Unknown,
                 last_error: None,
             }),
             profiles: Arc::new(ProfilesSlice {
@@ -398,7 +486,7 @@ impl<K: ProxyKernel> AppCoordinator<K> {
             settings: Arc::new(SettingsSlice {
                 revision: 0,
                 syncable: syncable.clone(),
-                local,
+                local: local.clone(),
             }),
             ..Default::default()
         };
@@ -418,12 +506,16 @@ impl<K: ProxyKernel> AppCoordinator<K> {
             config_manager,
             state_store,
             syncable,
+            local,
             compiler,
             supervisor,
             kernel: Arc::clone(&kernel),
             snapshots: Arc::clone(&snapshots),
             telemetry: telemetry.clone(),
             sysproxy_manager,
+            subscription_fetcher,
+            auto_launch_backend,
+            service_control_backend,
             config,
         };
 
@@ -451,6 +543,18 @@ impl<K: ProxyKernel> AppCoordinator<K> {
                     let res = self.handle_import_local_profile(id, name, raw_yaml, merge_yaml);
                     send_reply("import_local_profile", reply, res);
                 }
+                AppCommand::ImportRemoteProfile { url, name, reply } => {
+                    let res = self.handle_import_remote_profile(url, name).await;
+                    send_reply("import_remote_profile", reply, res);
+                }
+                AppCommand::RefreshProfile { profile_id, reply } => {
+                    let res = self.handle_refresh_profile(&profile_id).await;
+                    send_reply("refresh_profile", reply, res);
+                }
+                AppCommand::DeleteProfile { profile_id, reply } => {
+                    let res = self.handle_delete_profile(&profile_id).await;
+                    send_reply("delete_profile", reply, res);
+                }
                 AppCommand::ActivateProfile { profile_id, reply } => {
                     let res = self.handle_activate_profile(&profile_id).await;
                     send_reply("activate_profile", reply, res);
@@ -466,6 +570,14 @@ impl<K: ProxyKernel> AppCoordinator<K> {
                 AppCommand::StopKernel { reply } => {
                     let res = self.handle_stop_kernel().await;
                     send_reply("stop_kernel", reply, res);
+                }
+                AppCommand::RestartKernel { reply } => {
+                    let res = self.handle_restart_kernel().await;
+                    if let Err(ref err) = res {
+                        let msg = err.to_string();
+                        self.snapshots.publish_runtime(|r| r.last_error = Some(msg));
+                    }
+                    send_reply("restart_kernel", reply, res);
                 }
                 AppCommand::RefreshProxies { reply } => {
                     let res = self.refresh_proxies_internal().await;
@@ -483,6 +595,23 @@ impl<K: ProxyKernel> AppCoordinator<K> {
                 } => {
                     let res = self.handle_test_delay(&node, &url, timeout).await;
                     send_reply("test_delay", reply, res);
+                }
+                AppCommand::TestGroupDelay {
+                    group,
+                    url,
+                    timeout,
+                    reply,
+                } => {
+                    let res = self.handle_test_group_delay(&group, &url, timeout).await;
+                    send_reply("test_group_delay", reply, res);
+                }
+                AppCommand::TestAllGroupsDelay {
+                    url,
+                    timeout,
+                    reply,
+                } => {
+                    let res = self.handle_test_all_groups_delay(&url, timeout).await;
+                    send_reply("test_all_groups_delay", reply, res);
                 }
                 AppCommand::SetProxyMode { mode, reply } => {
                     let res = self.handle_set_proxy_mode(mode).await;
@@ -504,13 +633,60 @@ impl<K: ProxyKernel> AppCoordinator<K> {
                     }
                     send_reply("set_tun_enabled", reply, res);
                 }
+                AppCommand::UpdateNetworkSettings {
+                    mixed_port,
+                    allow_lan,
+                    ipv6,
+                    system_proxy_bypass,
+                    reply,
+                } => {
+                    let res = self
+                        .handle_update_network_settings(
+                            mixed_port,
+                            allow_lan,
+                            ipv6,
+                            system_proxy_bypass,
+                        )
+                        .await;
+                    send_reply("update_network_settings", reply, res);
+                }
+                AppCommand::UpdateTunSettings {
+                    tun,
+                    tun_interface_name,
+                    reply,
+                } => {
+                    let res = self
+                        .handle_update_tun_settings(tun, tun_interface_name)
+                        .await;
+                    send_reply("update_tun_settings", reply, res);
+                }
                 AppCommand::SetThemeMode { mode, reply } => {
                     let res = self.handle_set_theme_mode(mode);
                     send_reply("set_theme_mode", reply, res);
                 }
+                AppCommand::SetThemeSeedColor { seed_argb, reply } => {
+                    let res = self.handle_set_theme_seed_color(seed_argb);
+                    send_reply("set_theme_seed_color", reply, res);
+                }
                 AppCommand::SetLocale { locale, reply } => {
                     let res = self.handle_set_locale(locale);
                     send_reply("set_locale", reply, res);
+                }
+                AppCommand::SetAutoLaunch { enabled, reply } => {
+                    let res = self.handle_set_auto_launch(enabled);
+                    send_reply("set_auto_launch", reply, res);
+                }
+                AppCommand::SetServiceMode { enabled, reply } => {
+                    let res = self.handle_set_service_mode(enabled).await;
+                    if let Err(ref err) = res {
+                        let msg = err.to_string();
+                        self.snapshots.publish_runtime(|r| r.last_error = Some(msg));
+                    }
+                    send_reply("set_service_mode", reply, res);
+                }
+                AppCommand::ServiceAction { action, reply } => {
+                    let res = self.handle_service_action(action).await;
+                    send_reply("service_action", reply, res);
                 }
                 AppCommand::RefreshRules { reply } => {
                     let res = self.handle_refresh_rules().await;
@@ -585,6 +761,196 @@ impl<K: ProxyKernel> AppCoordinator<K> {
         });
 
         Ok(entry)
+    }
+
+    async fn handle_import_remote_profile(
+        &mut self,
+        url: String,
+        name: Option<String>,
+    ) -> Result<ProfileEntry, CoreError> {
+        let trimmed_url = url.trim();
+        if trimmed_url.is_empty() {
+            return Err(CoreError::InvalidInput(
+                "subscription URL must not be empty".into(),
+            ));
+        }
+
+        let fetched = self.subscription_fetcher.fetch(trimmed_url).await?;
+        validate_profile_yaml(&fetched.raw_yaml)?;
+
+        let resolved_name = name
+            .map(|n| n.trim().to_owned())
+            .filter(|n| !n.is_empty())
+            .or(fetched.suggested_name)
+            .or_else(|| infer_profile_name(trimmed_url, None, None))
+            .unwrap_or_else(|| "Subscription".to_owned());
+
+        let existing_ids: Vec<&str> = self
+            .syncable
+            .profiles
+            .iter()
+            .map(|entry| entry.id.as_str())
+            .collect();
+        let id = generate_profile_id(&resolved_name, &existing_ids);
+        let file_name = format!("{id}.yaml");
+        let _ = self.config_manager.profile_path(&file_name)?;
+
+        let entry = ProfileEntry {
+            id: id.clone(),
+            name: resolved_name,
+            source: ProfileSource::Remote {
+                url: trimmed_url.to_owned(),
+                update_interval_mins: None,
+            },
+            file_name: file_name.clone(),
+            merge_file_name: None,
+            script_file_name: None,
+        };
+
+        let mut candidate_syncable = self.syncable.clone();
+        candidate_syncable.profiles.push(entry.clone());
+        candidate_syncable.normalize_and_validate()?;
+
+        self.config_manager
+            .write_profile_yaml(&file_name, &fetched.raw_yaml)?;
+
+        self.syncable = candidate_syncable;
+        self.config_manager.save_syncable(&self.syncable)?;
+
+        let usage_record = if let Some(usage) = fetched.usage {
+            let record = ProfileUsage {
+                profile_id: id.clone(),
+                upload_bytes: usage.upload_bytes,
+                download_bytes: usage.download_bytes,
+                total_bytes: usage.total_bytes,
+                expire_unix_secs: usage.expire_unix_secs,
+                updated_at_unix_secs: now_unix_secs(),
+            };
+            self.state_store.upsert_profile_usage(&record)?;
+            Some(record)
+        } else {
+            None
+        };
+
+        self.snapshots.publish_profiles(|profiles| {
+            profiles.profiles = self.syncable.profiles.clone();
+            if let Some(record) = usage_record {
+                profiles.usages.insert(record.profile_id.clone(), record);
+            }
+        });
+        self.snapshots.publish_settings(|settings| {
+            settings.syncable = self.syncable.clone();
+        });
+
+        Ok(entry)
+    }
+
+    async fn handle_refresh_profile(
+        &mut self,
+        profile_id: &str,
+    ) -> Result<ProfileEntry, CoreError> {
+        let profile = self
+            .syncable
+            .profiles
+            .iter()
+            .find(|entry| entry.id == profile_id)
+            .cloned()
+            .ok_or_else(|| CoreError::ProfileNotFound(profile_id.to_owned()))?;
+
+        let url = match &profile.source {
+            ProfileSource::Remote { url, .. } => url.clone(),
+            ProfileSource::Local => {
+                return Err(CoreError::InvalidInput(format!(
+                    "profile `{profile_id}` is a local profile and has no remote subscription URL"
+                )));
+            }
+        };
+
+        // Fetch and validate YAML BEFORE touching the existing profile file on disk.
+        let fetched = self.subscription_fetcher.fetch(&url).await?;
+        validate_profile_yaml(&fetched.raw_yaml)?;
+
+        self.config_manager
+            .write_profile_yaml(&profile.file_name, &fetched.raw_yaml)?;
+
+        let usage_record = if let Some(usage) = fetched.usage {
+            let record = ProfileUsage {
+                profile_id: profile.id.clone(),
+                upload_bytes: usage.upload_bytes,
+                download_bytes: usage.download_bytes,
+                total_bytes: usage.total_bytes,
+                expire_unix_secs: usage.expire_unix_secs,
+                updated_at_unix_secs: now_unix_secs(),
+            };
+            self.state_store.upsert_profile_usage(&record)?;
+            Some(record)
+        } else {
+            None
+        };
+
+        let is_active = self.syncable.active_profile_id.as_deref() == Some(profile_id);
+        if is_active && self.supervisor.is_running() {
+            let (_profile, committed) = self.compile_and_commit_profile(profile_id).await?;
+            self.kernel.reload_config(&committed.active_path).await?;
+            self.apply_saved_selections(profile_id).await;
+            self.refresh_proxies_internal().await?;
+        }
+
+        self.snapshots.publish_profiles(|profiles| {
+            if let Some(record) = usage_record {
+                profiles.usages.insert(record.profile_id.clone(), record);
+            }
+            if is_active {
+                profiles.last_compile_diagnostic = None;
+            }
+        });
+
+        Ok(profile)
+    }
+
+    async fn handle_delete_profile(&mut self, profile_id: &str) -> Result<(), CoreError> {
+        let index = self
+            .syncable
+            .profiles
+            .iter()
+            .position(|entry| entry.id == profile_id)
+            .ok_or_else(|| CoreError::ProfileNotFound(profile_id.to_owned()))?;
+
+        let was_active = self.syncable.active_profile_id.as_deref() == Some(profile_id);
+        if was_active && self.supervisor.is_running() {
+            self.handle_stop_kernel().await?;
+        }
+
+        let entry = self.syncable.profiles.remove(index);
+        if was_active {
+            self.syncable.active_profile_id = None;
+            let active_yaml = self.config_manager.runtime_dir().join("active.yaml");
+            let _ = std::fs::remove_file(active_yaml);
+        }
+
+        self.config_manager.save_syncable(&self.syncable)?;
+        self.config_manager.remove_profile_files(&entry)?;
+        self.state_store.remove_profile_metadata(profile_id)?;
+
+        self.snapshots.publish_profiles(|profiles| {
+            profiles.profiles = self.syncable.profiles.clone();
+            profiles.usages.remove(profile_id);
+            profiles.active_profile_id = self.syncable.active_profile_id.clone();
+            if was_active {
+                profiles.last_compile_diagnostic = None;
+            }
+        });
+        self.snapshots.publish_settings(|settings| {
+            settings.syncable = self.syncable.clone();
+        });
+        if was_active {
+            self.snapshots.publish_runtime(|runtime| {
+                runtime.active_profile_id = None;
+                runtime.active_profile_name = None;
+            });
+        }
+
+        Ok(())
     }
 
     async fn handle_activate_profile(
@@ -693,6 +1059,7 @@ impl<K: ProxyKernel> AppCoordinator<K> {
         }
 
         let local = self.config_manager.load_local()?;
+        self.local = local.clone();
         self.sync_supervisor_kind(local.service_mode_enabled);
 
         let active_path = self.config_manager.runtime_dir().join("active.yaml");
@@ -723,10 +1090,15 @@ impl<K: ProxyKernel> AppCoordinator<K> {
             self.snapshots.publish_runtime(|runtime| {
                 runtime.kernel_running = false;
                 runtime.kernel_pid = None;
+                runtime.kernel_version = None;
+                runtime.kernel_started_at_unix_secs = None;
                 runtime.last_error = Some(err.to_string());
             });
             return Err(err);
         }
+
+        let kernel_version = self.kernel.fetch_version().await.ok().flatten();
+        let started_at = now_unix_secs();
 
         if let Some(active_id) = self.syncable.active_profile_id.clone() {
             self.apply_saved_selections(&active_id).await;
@@ -736,6 +1108,8 @@ impl<K: ProxyKernel> AppCoordinator<K> {
         self.snapshots.publish_runtime(|runtime| {
             runtime.kernel_running = true;
             runtime.kernel_pid = Some(pid);
+            runtime.kernel_version = kernel_version;
+            runtime.kernel_started_at_unix_secs = Some(started_at);
             runtime.control_endpoint = Some(self.config.control_endpoint.clone());
             runtime.last_error = None;
         });
@@ -749,8 +1123,17 @@ impl<K: ProxyKernel> AppCoordinator<K> {
         self.snapshots.publish_runtime(|runtime| {
             runtime.kernel_running = false;
             runtime.kernel_pid = None;
+            runtime.kernel_version = None;
+            runtime.kernel_started_at_unix_secs = None;
         });
         Ok(())
+    }
+
+    async fn handle_restart_kernel(&mut self) -> Result<u32, CoreError> {
+        if self.supervisor.is_running() {
+            self.handle_stop_kernel().await?;
+        }
+        self.handle_start_kernel().await
     }
 
     async fn refresh_proxies_internal(&mut self) -> Result<ProxyTopology, CoreError> {
@@ -799,6 +1182,108 @@ impl<K: ProxyKernel> AppCoordinator<K> {
         });
 
         Ok(delay)
+    }
+
+    async fn handle_test_group_delay(
+        &mut self,
+        group: &str,
+        url: &str,
+        timeout: Duration,
+    ) -> Result<BTreeMap<String, Option<u16>>, CoreError> {
+        let topology = self.kernel.fetch_proxies().await?;
+        let target_group = topology
+            .groups
+            .iter()
+            .find(|g| g.name == group)
+            .ok_or_else(|| CoreError::InvalidInput(format!("proxy group `{group}` not found")))?;
+
+        let group_names: HashSet<&str> = topology.groups.iter().map(|g| g.name.as_str()).collect();
+        let mut seen = HashSet::new();
+        let mut targets = Vec::new();
+        for member in &target_group.all {
+            if is_builtin_proxy_name(member) || group_names.contains(member.as_str()) {
+                continue;
+            }
+            if seen.insert(member.as_str()) {
+                targets.push(member.clone());
+            }
+        }
+
+        self.run_concurrent_delay_probes(topology, targets, url, timeout)
+            .await
+    }
+
+    async fn handle_test_all_groups_delay(
+        &mut self,
+        url: &str,
+        timeout: Duration,
+    ) -> Result<BTreeMap<String, Option<u16>>, CoreError> {
+        let topology = self.kernel.fetch_proxies().await?;
+        let group_names: HashSet<&str> = topology.groups.iter().map(|g| g.name.as_str()).collect();
+        let mut seen = HashSet::new();
+        let mut targets = Vec::new();
+
+        for group in topology.groups.iter().filter(|g| !g.hidden) {
+            for member in &group.all {
+                if is_builtin_proxy_name(member) || group_names.contains(member.as_str()) {
+                    continue;
+                }
+                if seen.insert(member.as_str()) {
+                    targets.push(member.clone());
+                }
+            }
+        }
+
+        self.run_concurrent_delay_probes(topology, targets, url, timeout)
+            .await
+    }
+
+    async fn run_concurrent_delay_probes(
+        &mut self,
+        mut topology: ProxyTopology,
+        targets: Vec<String>,
+        url: &str,
+        timeout: Duration,
+    ) -> Result<BTreeMap<String, Option<u16>>, CoreError> {
+        let kernel = Arc::clone(&self.kernel);
+        let probe_url = url.to_owned();
+
+        let measured: Vec<(String, Option<u16>)> = stream::iter(targets)
+            .map(|node| {
+                let kernel = Arc::clone(&kernel);
+                let probe_url = probe_url.clone();
+                async move {
+                    let delay = kernel.test_delay(&node, &probe_url, timeout).await.ok();
+                    (node, delay)
+                }
+            })
+            .buffer_unordered(MAX_CONCURRENT_DELAY_TESTS)
+            .collect()
+            .await;
+
+        let now = now_unix_secs();
+        let mut results = BTreeMap::new();
+        for (node, delay) in measured {
+            if let Some(ms) = delay {
+                self.state_store.set_delay_ms(&node, ms, now)?;
+            }
+            results.insert(node, delay);
+        }
+
+        let delay_cache = self.state_store.get_delay_cache()?;
+        overlay_cached_delays(&mut topology, &delay_cache);
+        for (node, delay) in &results {
+            if let Some(entry) = topology.nodes.get_mut(node) {
+                entry.latest_delay_ms = *delay;
+            }
+        }
+
+        self.snapshots.publish_proxies(|proxies| {
+            proxies.groups = topology.groups;
+            proxies.nodes = topology.nodes;
+        });
+
+        Ok(results)
     }
 
     async fn handle_set_proxy_mode(&mut self, mode: ProxyMode) -> Result<(), CoreError> {
@@ -875,6 +1360,8 @@ impl<K: ProxyKernel> AppCoordinator<K> {
                     self.snapshots.publish_runtime(|runtime| {
                         runtime.kernel_running = false;
                         runtime.kernel_pid = None;
+                        runtime.kernel_version = None;
+                        runtime.kernel_started_at_unix_secs = None;
                     });
                     self.sync_supervisor_kind(local.service_mode_enabled);
                     self.handle_start_kernel().await?;
@@ -886,6 +1373,90 @@ impl<K: ProxyKernel> AppCoordinator<K> {
             } else {
                 self.sync_supervisor_kind(local.service_mode_enabled);
             }
+        }
+
+        Ok(())
+    }
+
+    async fn handle_update_network_settings(
+        &mut self,
+        mixed_port: u16,
+        allow_lan: bool,
+        ipv6: bool,
+        system_proxy_bypass: Vec<String>,
+    ) -> Result<(), CoreError> {
+        let mut candidate = self.syncable.clone();
+        candidate.mixed_port = mixed_port;
+        candidate.allow_lan = allow_lan;
+        candidate.ipv6 = ipv6;
+        candidate.system_proxy_bypass = system_proxy_bypass
+            .into_iter()
+            .map(|entry| entry.trim().to_owned())
+            .filter(|entry| !entry.is_empty())
+            .collect();
+        candidate.normalize_and_validate()?;
+
+        self.syncable = candidate;
+        self.config_manager.save_syncable(&self.syncable)?;
+
+        self.snapshots.publish_settings(|settings| {
+            settings.syncable = self.syncable.clone();
+        });
+        self.snapshots.publish_runtime(|runtime| {
+            runtime.mixed_port = self.syncable.mixed_port;
+        });
+
+        if self.syncable.system_proxy_enabled {
+            self.sysproxy_manager.enable(
+                "127.0.0.1",
+                self.syncable.mixed_port,
+                &self.syncable.system_proxy_bypass,
+            )?;
+        }
+
+        if self.supervisor.is_running()
+            && let Some(active_id) = self.syncable.active_profile_id.clone()
+        {
+            let (_profile, committed) = self.compile_and_commit_profile(&active_id).await?;
+            self.kernel.reload_config(&committed.active_path).await?;
+            self.apply_saved_selections(&active_id).await;
+            self.refresh_proxies_internal().await?;
+        }
+
+        Ok(())
+    }
+
+    async fn handle_update_tun_settings(
+        &mut self,
+        tun: TunConfig,
+        tun_interface_name: Option<String>,
+    ) -> Result<(), CoreError> {
+        let mut candidate_syncable = self.syncable.clone();
+        candidate_syncable.tun = tun;
+        candidate_syncable.normalize_and_validate()?;
+
+        let mut candidate_local = self.local.clone();
+        candidate_local.tun_interface_name = tun_interface_name;
+        candidate_local.normalize_and_validate()?;
+
+        self.syncable = candidate_syncable;
+        self.local = candidate_local;
+        self.config_manager.save_syncable(&self.syncable)?;
+        self.config_manager.save_local(&self.local)?;
+
+        self.snapshots.publish_settings(|settings| {
+            settings.syncable = self.syncable.clone();
+            settings.local = self.local.clone();
+        });
+
+        if self.syncable.tun_enabled
+            && self.supervisor.is_running()
+            && let Some(active_id) = self.syncable.active_profile_id.clone()
+        {
+            let (_profile, committed) = self.compile_and_commit_profile(&active_id).await?;
+            self.kernel.reload_config(&committed.active_path).await?;
+            self.apply_saved_selections(&active_id).await;
+            self.refresh_proxies_internal().await?;
         }
 
         Ok(())
@@ -912,6 +1483,15 @@ impl<K: ProxyKernel> AppCoordinator<K> {
         Ok(())
     }
 
+    fn handle_set_theme_seed_color(&mut self, seed_argb: Option<u32>) -> Result<(), CoreError> {
+        self.syncable.theme_seed_color = seed_argb;
+        self.config_manager.save_syncable(&self.syncable)?;
+        self.snapshots.publish_settings(|settings| {
+            settings.syncable = self.syncable.clone();
+        });
+        Ok(())
+    }
+
     fn handle_set_locale(&mut self, locale: String) -> Result<(), CoreError> {
         let normalized = verve_config::normalize_locale(&locale)?;
         self.syncable.locale = normalized;
@@ -920,6 +1500,80 @@ impl<K: ProxyKernel> AppCoordinator<K> {
             settings.syncable = self.syncable.clone();
         });
         Ok(())
+    }
+
+    fn handle_set_auto_launch(&mut self, enabled: bool) -> Result<(), CoreError> {
+        let backend = match &self.auto_launch_backend {
+            Some(backend) => Arc::clone(backend),
+            None => {
+                let resolved = default_auto_launch_backend()?;
+                self.auto_launch_backend = Some(Arc::clone(&resolved));
+                resolved
+            }
+        };
+        backend.set_enabled(enabled)?;
+
+        self.local.auto_launch = enabled;
+        self.config_manager.save_local(&self.local)?;
+        self.snapshots.publish_settings(|settings| {
+            settings.local = self.local.clone();
+        });
+        Ok(())
+    }
+
+    async fn handle_set_service_mode(&mut self, enabled: bool) -> Result<(), CoreError> {
+        self.local.service_mode_enabled = enabled;
+        self.config_manager.save_local(&self.local)?;
+        self.snapshots.publish_settings(|settings| {
+            settings.local = self.local.clone();
+        });
+
+        let want_service = enabled && self.config.service_ipc_client.is_some();
+        let is_service = matches!(self.supervisor, KernelSupervisor::Service(_));
+        if self.supervisor.is_running() {
+            if want_service != is_service {
+                self.handle_stop_kernel().await?;
+                self.sync_supervisor_kind(enabled);
+                self.handle_start_kernel().await?;
+            }
+        } else {
+            self.sync_supervisor_kind(enabled);
+        }
+
+        Ok(())
+    }
+
+    async fn handle_service_action(
+        &mut self,
+        action: ServiceControlAction,
+    ) -> Result<ServiceStatus, CoreError> {
+        match action {
+            ServiceControlAction::CheckStatus => {}
+            ServiceControlAction::Install => {
+                let mut trusted_dirs = Vec::new();
+                if let Some(bin) = self.resolve_kernel_binary()
+                    && let Some(parent) = bin.parent()
+                {
+                    trusted_dirs.push(parent.to_path_buf());
+                }
+                let root = self.config_manager.root_dir().to_path_buf();
+                if !trusted_dirs.contains(&root) {
+                    trusted_dirs.push(root);
+                }
+                self.service_control_backend
+                    .install_service(&trusted_dirs)
+                    .await?;
+            }
+            ServiceControlAction::Uninstall => {
+                self.service_control_backend.uninstall_service().await?;
+            }
+        }
+
+        let status = probe_service_status(self.config.service_ipc_client.clone()).await;
+        self.snapshots.publish_runtime(|runtime| {
+            runtime.service_status = status.clone();
+        });
+        Ok(status)
     }
 
     fn sync_supervisor_kind(&mut self, service_mode_enabled: bool) {
@@ -970,6 +1624,8 @@ impl<K: ProxyKernel> AppCoordinator<K> {
         self.snapshots.publish_runtime(|runtime| {
             runtime.kernel_running = false;
             runtime.kernel_pid = None;
+            runtime.kernel_version = None;
+            runtime.kernel_started_at_unix_secs = None;
             runtime.system_proxy_enabled = false;
         });
         stop_res
@@ -1064,6 +1720,15 @@ impl<K: ProxyKernel> AppCoordinator<K> {
             log_level: parse_log_level(&self.syncable.log_level),
             control_endpoint: self.config.control_endpoint.clone(),
             tun_enabled: self.syncable.tun_enabled,
+            tun: TunInjectionConfig {
+                stack: self.syncable.tun.stack.clone(),
+                auto_route: self.syncable.tun.auto_route,
+                strict_route: self.syncable.tun.strict_route,
+                dns_hijack: self.syncable.tun.dns_hijack.clone(),
+                mtu: self.syncable.tun.mtu,
+                route_exclude_address: self.syncable.tun.route_exclude_address.clone(),
+                interface_name: self.local.tun_interface_name.clone(),
+            },
         }
     }
 
@@ -1113,6 +1778,29 @@ fn overlay_cached_delays(topology: &mut ProxyTopology, delay_cache: &BTreeMap<St
         {
             node.latest_delay_ms = Some(cached);
         }
+    }
+}
+
+fn is_builtin_proxy_name(name: &str) -> bool {
+    matches!(
+        name.trim().to_ascii_uppercase().as_str(),
+        "DIRECT" | "REJECT" | "REJECT-DROP" | "PASS" | "COMPATIBLE"
+    )
+}
+
+async fn probe_service_status(client: Option<Arc<dyn ServiceIpcClient>>) -> ServiceStatus {
+    match client {
+        Some(client) => match client.query_remote_status().await {
+            Ok(remote) => ServiceStatus::Available {
+                running_pid: if remote.running { remote.pid } else { None },
+            },
+            Err(err) => ServiceStatus::Unavailable {
+                reason: Some(err.to_string()),
+            },
+        },
+        None => ServiceStatus::Unavailable {
+            reason: Some("service IPC client is not configured".into()),
+        },
     }
 }
 
