@@ -258,13 +258,20 @@ fn shell_navigates_all_routes_toggles_theme_and_opens_hosts(cx: &mut TestAppCont
         assert_eq!(cx.read(|cx| shell.read(cx).active_route()), route);
     }
 
-    // Verify sidebar collapse toggle.
+    // Verify sidebar collapse and re-expand toggle through retained NavigationRailState.
     cx.update_window(window.into(), |_, window, cx| {
         shell.update(cx, |s, cx| s.toggle_sidebar(cx));
         let _ = window.draw(cx);
     })
     .unwrap();
     assert!(cx.read(|cx| shell.read(cx).is_sidebar_collapsed()));
+
+    cx.update_window(window.into(), |_, window, cx| {
+        shell.update(cx, |s, cx| s.toggle_sidebar(cx));
+        let _ = window.draw(cx);
+    })
+    .unwrap();
+    assert!(!cx.read(|cx| shell.read(cx).is_sidebar_collapsed()));
 
     // Toggle Light -> Dark theme and verify surface tokens flip.
     let light_surface = cx.read(|cx| theme_tokens(cx).surface);
