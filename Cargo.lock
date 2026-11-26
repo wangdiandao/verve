@@ -2713,9 +2713,9 @@ dependencies = [
 
 [[package]]
 name = "gpui-material"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae075a3988a469a4fc68bd8cb1b90f478be87c9117d2e2fccd911f1ccef0fcdc"
+checksum = "3da81a68cb88887fc33fe616639a29e8c1e8113b5745ed14055d009ad7aa3395"
 dependencies = [
  "gpui-material-components",
  "gpui-material-extras",
@@ -2726,9 +2726,9 @@ dependencies = [
 
 [[package]]
 name = "gpui-material-components"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2c13eec2f7e9d89569f019772b833e118620b47939a253fc7ac7375c1a1efd1"
+checksum = "d038dd27b45c3cdd5228c2bb3ddd2916bb0e90ef796e98410fdde872b29cc8b2"
 dependencies = [
  "gpui-base",
  "gpui-material-foundation",
@@ -2739,9 +2739,9 @@ dependencies = [
 
 [[package]]
 name = "gpui-material-extras"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc7f67faadd889bead8e362cd3ca8126494278f00c33ce3e8cf164fba18de9b4"
+checksum = "233b1b4aefd608e2e832b5c580d0ced98a78f176212c5e9b43b822995c84ebb3"
 dependencies = [
  "gpui-base",
  "gpui-material-components",
@@ -2754,9 +2754,9 @@ dependencies = [
 
 [[package]]
 name = "gpui-material-foundation"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43b0725820e794ac74a1a571783ba5cb94c4ca48fcbcedad23c42bea1528f73d"
+checksum = "943abc62141e38371ea9a49f1ff7e3f167af1446a00c69c9132b9bd21239e3c3"
 dependencies = [
  "gpui-base",
  "gpui-material-theme",
@@ -2805,9 +2805,9 @@ checksum = "d384c2022f21c457cdbd07e5c73bc9924d39ec8572d0f060dec035291f5e1513"
 
 [[package]]
 name = "gpui-material-theme"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e7ac9cbef1f2a5bcc8b6492bbc6b15477f83e9e8d943ea95c358657639f1ff0"
+checksum = "d524a0276dce8b103a74d50cf07a0686d3167e7df2078430bdb9059297eb4cb4"
 dependencies = [
  "material-color-utils",
 ]

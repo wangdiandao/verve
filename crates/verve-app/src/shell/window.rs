@@ -478,43 +478,35 @@ impl Render for AppShell {
             }
         });
 
+        let footer = div()
+            .w_full()
+            .px(if self.sidebar_collapsed {
+                px(0.0)
+            } else {
+                px(8.0)
+            })
+            .pb(if self.sidebar_collapsed {
+                px(0.0)
+            } else {
+                px(4.0)
+            })
+            .child(self.render_telemetry_pod(self.sidebar_collapsed, cx));
+
         let sidebar = div()
             .h_full()
-            .flex()
-            .flex_col()
-            .justify_between()
-            .overflow_hidden()
-            .bg(tokens.surface_container_low)
+            .flex_none()
             .border_r_1()
             .border_color(tokens.outline_variant)
             .child(
-                div().flex_1().min_h_0().child(
-                    NavigationRail::new("verve-nav-rail", nav_items)
-                        .state(&self.rail_state)
-                        .expanded_width(px(236.0))
-                        .title(rust_i18n::t!("shell.primary_nav").into_owned())
-                        .colors(NavigationRailColors {
-                            container: Some(tokens.surface_container_low),
-                            ..Default::default()
-                        }),
-                ),
-            )
-            .child(
-                div()
-                    .w(px(0.0))
-                    .min_w_full()
-                    .overflow_hidden()
-                    .px(if self.sidebar_collapsed {
-                        px(0.0)
-                    } else {
-                        px(12.0)
+                NavigationRail::new("verve-nav-rail", nav_items)
+                    .state(&self.rail_state)
+                    .expanded_width(px(236.0))
+                    .title(rust_i18n::t!("shell.primary_nav").into_owned())
+                    .colors(NavigationRailColors {
+                        container: Some(tokens.surface_container_low),
+                        ..Default::default()
                     })
-                    .pb(if self.sidebar_collapsed {
-                        px(0.0)
-                    } else {
-                        px(12.0)
-                    })
-                    .child(self.render_telemetry_pod(self.sidebar_collapsed, cx)),
+                    .footer(footer),
             )
             .into_any_element();
 
