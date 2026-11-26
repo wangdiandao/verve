@@ -280,12 +280,7 @@ impl OverviewView {
         state
     }
 
-    fn render_network_card(
-        &self,
-        runtime: &RuntimeSlice,
-        settings: &SettingsSlice,
-        cx: &mut Context<Self>,
-    ) -> SectionCard {
+    fn render_network_card(&self, runtime: &RuntimeSlice, cx: &mut Context<Self>) -> SectionCard {
         let tokens = theme_tokens(cx);
         let selected_mode = match runtime.proxy_mode {
             ProxyMode::Rule => "rule",
@@ -352,39 +347,16 @@ impl OverviewView {
             rust_i18n::t!("overview.system_proxy.title").into_owned(),
             runtime.system_proxy_enabled,
         )
-        .supporting(
-            rust_i18n::t!(
-                "overview.system_proxy.supporting",
-                port = runtime.mixed_port
-            )
-            .into_owned(),
-        )
         .on_change(move |enabled, _, _| {
             sysproxy_commands.set_system_proxy(enabled);
         });
 
         let tun_commands = self.commands.clone();
-        let tun_subtitle = if settings.local.service_mode_enabled {
-            match &runtime.service_status {
-                ServiceStatus::Available { .. } => {
-                    rust_i18n::t!("overview.tun.supporting_service_available").into_owned()
-                }
-                ServiceStatus::Unavailable { .. } => {
-                    rust_i18n::t!("overview.tun.supporting_service_unavailable").into_owned()
-                }
-                ServiceStatus::Unknown => {
-                    rust_i18n::t!("overview.tun.supporting_service").into_owned()
-                }
-            }
-        } else {
-            rust_i18n::t!("overview.tun.supporting_direct").into_owned()
-        };
         let tun_switch = SwitchTile::new(
             "overview-tun-mode",
             rust_i18n::t!("overview.tun.title").into_owned(),
             runtime.tun_enabled,
         )
-        .supporting(tun_subtitle)
         .on_change(move |enabled, _, _| {
             tun_commands.set_tun_enabled(enabled);
         });
@@ -494,7 +466,6 @@ impl OverviewView {
 
         SectionCard::new()
             .title(rust_i18n::t!("overview.network_card.title").into_owned())
-            .subtitle(rust_i18n::t!("overview.network_card.subtitle").into_owned())
             .header_trailing(HealthIndicator::new(health_state).label(health_label))
             .child(
                 div()
@@ -560,7 +531,7 @@ impl OverviewView {
             card = card.child(
                 EmptyState::new(
                     rust_i18n::t!("overview.profile_card.empty_title").into_owned(),
-                    rust_i18n::t!("overview.profile_card.empty_desc").into_owned(),
+                    "",
                 )
                 .action(
                     Button::new(
@@ -633,121 +604,103 @@ impl OverviewView {
                     .when_some(remote_refresh_btn, |row, btn| row.child(btn)),
             );
 
-            if let Some(active_profile_id) = active_id {
-                if let Some(usage) = profiles.usages.get(active_profile_id) {
-                    let quota = compute_quota_summary(usage);
-                    let expiry = resolve_profile_expiry(usage.expire_unix_secs, now_unix_secs);
+            if let Some(active_profile_id) = active_id
+                && let Some(usage) = profiles.usages.get(active_profile_id)
+            {
+                let quota = compute_quota_summary(usage);
+                let expiry = resolve_profile_expiry(usage.expire_unix_secs, now_unix_secs);
 
-                    let quota_label = match (quota.total_bytes, quota.percent) {
-                        (Some(total), Some(percent)) if total > 0 => rust_i18n::t!(
-                            "overview.profile_card.quota_used_total",
-                            used = format_bytes(quota.used_bytes),
-                            total = format_bytes(total),
-                            percent = percent
-                        )
-                        .into_owned(),
-                        _ => rust_i18n::t!(
-                            "overview.profile_card.usage",
-                            down = format_bytes(usage.download_bytes),
-                            up = format_bytes(usage.upload_bytes)
-                        )
-                        .into_owned(),
-                    };
-
-                    let (expiry_label, expiry_color) = match expiry {
-                        ProfileExpiryStatus::Never => (
-                            rust_i18n::t!("common.never").into_owned(),
-                            tokens.on_surface_variant,
-                        ),
-                        ProfileExpiryStatus::Valid(date) => (
-                            rust_i18n::t!("overview.profile_card.expires_on", date = date)
-                                .into_owned(),
-                            tokens.on_surface_variant,
-                        ),
-                        ProfileExpiryStatus::Expired(date) => (
-                            format!("{} · {date}", rust_i18n::t!("common.expired")),
-                            tokens.error,
-                        ),
-                    };
-
-                    let progress_tone = match quota.progress {
-                        Some(p) if p >= 0.9 => SemanticTone::Danger,
-                        Some(p) if p >= 0.75 => SemanticTone::Warning,
-                        _ => SemanticTone::Default,
-                    };
-
-                    let usage_breakdown = rust_i18n::t!(
+                let quota_label = match (quota.total_bytes, quota.percent) {
+                    (Some(total), Some(percent)) if total > 0 => rust_i18n::t!(
+                        "overview.profile_card.quota_used_total",
+                        used = format_bytes(quota.used_bytes),
+                        total = format_bytes(total),
+                        percent = percent
+                    )
+                    .into_owned(),
+                    _ => rust_i18n::t!(
                         "overview.profile_card.usage",
                         down = format_bytes(usage.download_bytes),
                         up = format_bytes(usage.upload_bytes)
                     )
-                    .into_owned();
+                    .into_owned(),
+                };
 
-                    card = card.child(
-                        div()
-                            .w_full()
-                            .p(px(12.0))
-                            .rounded(px(12.0))
-                            .bg(tokens.surface_container)
-                            .border_1()
-                            .border_color(tokens.outline_variant)
-                            .flex()
-                            .flex_col()
-                            .gap(px(8.0))
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_row()
-                                    .flex_wrap()
-                                    .items_center()
-                                    .justify_between()
-                                    .gap(px(8.0))
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(tokens.on_surface)
-                                            .child(quota_label),
-                                    )
-                                    .child(
-                                        div()
-                                            .text_xs()
-                                            .text_color(expiry_color)
-                                            .child(expiry_label),
-                                    ),
-                            )
-                            .when_some(quota.progress, |block, progress| {
-                                block.child(
-                                    LinearProgress::new(
-                                        "overview-profile-quota-progress",
-                                        rust_i18n::t!("overview.profile_card.quota_progress_label")
-                                            .into_owned(),
-                                    )
-                                    .value(progress)
-                                    .tone(progress_tone),
-                                )
-                            })
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(tokens.on_surface_variant)
-                                    .child(usage_breakdown),
-                            ),
-                    );
-                } else {
-                    card = card.child(
-                        div()
-                            .text_xs()
-                            .text_color(tokens.on_surface_variant)
-                            .child(rust_i18n::t!("overview.profile_card.no_quota").into_owned()),
-                    );
-                }
-            } else {
+                let (expiry_label, expiry_color) = match expiry {
+                    ProfileExpiryStatus::Never => (
+                        rust_i18n::t!("common.never").into_owned(),
+                        tokens.on_surface_variant,
+                    ),
+                    ProfileExpiryStatus::Valid(date) => (
+                        rust_i18n::t!("overview.profile_card.expires_on", date = date).into_owned(),
+                        tokens.on_surface_variant,
+                    ),
+                    ProfileExpiryStatus::Expired(date) => (
+                        format!("{} · {date}", rust_i18n::t!("common.expired")),
+                        tokens.error,
+                    ),
+                };
+
+                let progress_tone = match quota.progress {
+                    Some(p) if p >= 0.9 => SemanticTone::Danger,
+                    Some(p) if p >= 0.75 => SemanticTone::Warning,
+                    _ => SemanticTone::Default,
+                };
+
+                let usage_breakdown = rust_i18n::t!(
+                    "overview.profile_card.usage",
+                    down = format_bytes(usage.download_bytes),
+                    up = format_bytes(usage.upload_bytes)
+                )
+                .into_owned();
+
                 card = card.child(
                     div()
-                        .text_xs()
-                        .text_color(tokens.on_surface_variant)
-                        .child(rust_i18n::t!("overview.profile_card.select_hint").into_owned()),
+                        .w_full()
+                        .p(px(12.0))
+                        .rounded(px(12.0))
+                        .bg(tokens.surface_container)
+                        .border_1()
+                        .border_color(tokens.outline_variant)
+                        .flex()
+                        .flex_col()
+                        .gap(px(8.0))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_row()
+                                .flex_wrap()
+                                .items_center()
+                                .justify_between()
+                                .gap(px(8.0))
+                                .child(
+                                    div()
+                                        .text_xs()
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(tokens.on_surface)
+                                        .child(quota_label),
+                                )
+                                .child(
+                                    div().text_xs().text_color(expiry_color).child(expiry_label),
+                                ),
+                        )
+                        .when_some(quota.progress, |block, progress| {
+                            block.child(
+                                LinearProgress::new(
+                                    "overview-profile-quota-progress",
+                                    rust_i18n::t!("overview.profile_card.quota_progress_label")
+                                        .into_owned(),
+                                )
+                                .value(progress)
+                                .tone(progress_tone),
+                            )
+                        })
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(tokens.on_surface_variant)
+                                .child(usage_breakdown),
+                        ),
                 );
             }
         }
@@ -1023,7 +976,6 @@ impl OverviewView {
 
         SectionCard::new()
             .title(rust_i18n::t!("overview.traffic_card.title").into_owned())
-            .subtitle(rust_i18n::t!("overview.traffic_card.subtitle").into_owned())
             .header_trailing(window_switcher)
             .child(
                 div()
@@ -1201,7 +1153,7 @@ impl Render for OverviewView {
             now_unix_secs,
         };
 
-        let network_card = self.render_network_card(snapshot.runtime, snapshot.settings, cx);
+        let network_card = self.render_network_card(snapshot.runtime, cx);
         let profile_outbound_card = self.render_profile_outbound_card(&snapshot, window, cx);
         let traffic_card = self.render_traffic_card(snapshot.telemetry, cx);
         let status_bar = self.render_status_bar(
