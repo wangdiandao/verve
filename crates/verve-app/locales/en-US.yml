@@ -101,17 +101,38 @@ overview:
 
 proxies:
   title: "Proxies"
+  search_label: "Search nodes or protocols"
+  search_placeholder: "Filter by node name or protocol..."
+  clear_search: "Clear search"
+  test_all: "Test All"
+  testing_all_toast: "Testing latency across all proxy groups..."
+  testing_group_toast: "Testing latency for group \"%{group}\"..."
+  located_toast: "Located active node in \"%{group}\": %{node}"
   direct_empty:
     title: "Direct Mode Active"
     desc: "All connections bypass proxy selectors while routing mode is set to Direct."
+    switch_rule: "Switch to Rule Mode"
   empty:
     title: "No proxy groups loaded"
     running_desc: "No proxy groups returned by the kernel yet. Try refreshing."
     stopped_desc: "Start the proxy kernel to load groups and switch outbound nodes."
+    start_kernel: "Start Kernel"
+  search_empty:
+    title: "No matching nodes"
+    desc: "No nodes or protocols matched \"%{query}\"."
   protocol_group: "group"
   protocol_udp: "%{protocol} · UDP"
   probe_tooltip: "Probe %{node}"
+  locate_tooltip: "Locate selected node"
+  test_group_tooltip: "Test group %{group}"
   group_subtitle: "%{kind} · Current: %{current}"
+  group_current: "Current: %{current}"
+  group_count_filtered: "%{visible} / %{total}"
+  sort_label: "Node sort order"
+  sort:
+    default: "Default"
+    latency: "Latency"
+    name: "Name"
   kind:
     select: "Select"
     url_test: "URLTest"
