@@ -5,6 +5,7 @@ use gpui::{
     Render, Styled, Subscription, Window, WindowAppearance, WindowBounds, WindowOptions, div, px,
     size,
 };
+use gpui_material::theme::LogicalEdges;
 use gpui_material::window_chrome::{TitleBar, title_bar_window_options_with_height};
 use gpui_material::{
     Badge, Icon, IconButton, IconName, NavigationItem, NavigationItems, NavigationRail,
@@ -387,38 +388,6 @@ impl Render for AppShell {
             let _ = shell_entity.update(cx, |shell, cx| shell.toggle_sidebar(cx));
         });
 
-        let theme_cmd = self.commands.clone();
-        let is_dark = tokens.is_dark;
-        let theme_btn = IconButton::new(
-            "verve-theme-toggle",
-            if is_dark {
-                rust_i18n::t!("shell.switch_to_light").into_owned()
-            } else {
-                rust_i18n::t!("shell.switch_to_dark").into_owned()
-            },
-            Icon::new(if is_dark {
-                IconName::LightMode
-            } else {
-                IconName::DarkMode
-            }),
-        )
-        .on_activate(move |_, cx| {
-            let next_mode = if is_dark {
-                AppearanceMode::Light
-            } else {
-                AppearanceMode::Dark
-            };
-            let system_dark = matches!(
-                cx.window_appearance(),
-                WindowAppearance::Dark | WindowAppearance::VibrantDark
-            );
-            apply_theme(
-                build_material_theme(next_mode, Some(DEFAULT_SEED_ARGB), system_dark),
-                cx,
-            );
-            theme_cmd.set_theme_mode(next_mode.as_config_str());
-        });
-
         let (health_state, health_label) = if runtime.kernel_running {
             (
                 KernelHealthState::Running,
@@ -445,17 +414,27 @@ impl Render for AppShell {
                     .flex()
                     .flex_row()
                     .items_center()
-                    .gap(px(8.0))
                     .pr(px(8.0))
-                    .child(theme_btn)
                     .child(HealthIndicator::new(health_state).label(health_label)),
             );
 
+        let collapsed = self.sidebar_collapsed;
         let nav_items_vec: Vec<NavigationItem> = route_registry()
             .iter()
             .map(|desc| {
-                let mut item = NavigationItem::new(desc.id, desc.route.localized_label())
-                    .icon(desc.route.icon());
+                let icon = if collapsed {
+                    desc.route.icon().size(px(24.0))
+                } else {
+                    desc.route.icon()
+                };
+                let mut item =
+                    NavigationItem::new(desc.id, desc.route.localized_label()).icon(icon);
+                if collapsed {
+                    item = item.label_content(div()).indicator_padding(
+                        LogicalEdges::symmetric(16.0, 8.0),
+                        LogicalEdges::symmetric(16.0, 0.0),
+                    );
+                }
                 if desc.route == RouteId::Activity && conn_count > 0 {
                     item = item.badge(Badge::standalone_count(conn_count, 99));
                 }
@@ -492,21 +471,32 @@ impl Render for AppShell {
             })
             .child(self.render_telemetry_pod(self.sidebar_collapsed, cx));
 
+        let mut rail_slot = div().flex_1().min_h_0();
+        if !collapsed {
+            rail_slot = rail_slot.mt(px(-24.0));
+        }
+
         let sidebar = div()
             .h_full()
+            .flex()
+            .flex_col()
             .flex_none()
+            .overflow_hidden()
             .border_r_1()
             .border_color(tokens.outline_variant)
             .child(
-                NavigationRail::new("verve-nav-rail", nav_items)
-                    .state(&self.rail_state)
-                    .expanded_width(px(236.0))
-                    .title(rust_i18n::t!("shell.primary_nav").into_owned())
-                    .colors(NavigationRailColors {
-                        container: Some(tokens.surface_container_low),
-                        ..Default::default()
-                    })
-                    .footer(footer),
+                rail_slot.child(
+                    NavigationRail::new("verve-nav-rail", nav_items)
+                        .state(&self.rail_state)
+                        .expanded_width(px(236.0))
+                        .header_spacing(px(0.0))
+                        .title("")
+                        .colors(NavigationRailColors {
+                            container: Some(tokens.surface_container_low),
+                            ..Default::default()
+                        })
+                        .footer(footer),
+                ),
             )
             .into_any_element();
 

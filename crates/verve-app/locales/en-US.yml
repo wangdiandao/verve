@@ -28,8 +28,6 @@ shell:
   primary_nav: "Primary Navigation"
   expand_nav: "Expand navigation"
   collapse_nav: "Collapse navigation"
-  switch_to_light: "Switch to Light theme"
-  switch_to_dark: "Switch to Dark theme"
   health:
     running: "Running · :%{port}"
     running_short: "Running"

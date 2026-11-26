@@ -28,8 +28,6 @@ shell:
   primary_nav: "主导航栏"
   expand_nav: "展开导航栏"
   collapse_nav: "收起导航栏"
-  switch_to_light: "切换至浅色模式"
-  switch_to_dark: "切换至深色模式"
   health:
     running: "内核运行中 · :%{port}"
     running_short: "运行中"
