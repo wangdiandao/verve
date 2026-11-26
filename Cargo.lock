@@ -8285,7 +8285,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "verve-app"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "arc-swap",
  "async-channel",
@@ -8312,7 +8312,7 @@ dependencies = [
 
 [[package]]
 name = "verve-compiler"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -8325,7 +8325,7 @@ dependencies = [
 
 [[package]]
 name = "verve-config"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "directories",
  "rusqlite",
@@ -8339,7 +8339,7 @@ dependencies = [
 
 [[package]]
 name = "verve-core"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "arc-swap",
  "async-channel",
@@ -8365,14 +8365,14 @@ dependencies = [
 
 [[package]]
 name = "verve-editor"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "verve-ui-kit",
 ]
 
 [[package]]
 name = "verve-kernel"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "futures-util",
  "serde",
@@ -8385,7 +8385,7 @@ dependencies = [
 
 [[package]]
 name = "verve-kernel-mihomo"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "bytes",
  "futures-util",
@@ -8406,7 +8406,7 @@ dependencies = [
 
 [[package]]
 name = "verve-protocol"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "postcard",
  "serde",
@@ -8415,7 +8415,7 @@ dependencies = [
 
 [[package]]
 name = "verve-service"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "libc",
  "serde",
@@ -8433,7 +8433,7 @@ dependencies = [
 
 [[package]]
 name = "verve-sync"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "serde",
  "thiserror 2.0.21",
@@ -8442,7 +8442,7 @@ dependencies = [
 
 [[package]]
 name = "verve-sys"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "auto-launch",
  "ksni",
@@ -8460,7 +8460,7 @@ dependencies = [
 
 [[package]]
 name = "verve-ui-kit"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "gpui-base",
  "gpui-material",

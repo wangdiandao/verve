@@ -16,7 +16,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.0.2"
+version = "0.0.3"
 edition = "2024"
 rust-version = "1.95.0"
 license = "GPL-3.0-or-later"
@@ -26,18 +26,18 @@ publish = false
 
 [workspace.dependencies]
 # Internal workspace crates
-verve-app = { version = "=0.0.2", path = "crates/verve-app" }
-verve-compiler = { version = "=0.0.2", path = "crates/verve-compiler" }
-verve-config = { version = "=0.0.2", path = "crates/verve-config" }
-verve-core = { version = "=0.0.2", path = "crates/verve-core" }
-verve-editor = { version = "=0.0.2", path = "crates/verve-editor" }
-verve-kernel = { version = "=0.0.2", path = "crates/verve-kernel" }
-verve-kernel-mihomo = { version = "=0.0.2", path = "crates/verve-kernel-mihomo" }
-verve-protocol = { version = "=0.0.2", path = "crates/verve-protocol" }
-verve-service = { version = "=0.0.2", path = "crates/verve-service" }
-verve-sync = { version = "=0.0.2", path = "crates/verve-sync" }
-verve-sys = { version = "=0.0.2", path = "crates/verve-sys" }
-verve-ui-kit = { version = "=0.0.2", path = "crates/verve-ui-kit" }
+verve-app = { version = "=0.0.3", path = "crates/verve-app" }
+verve-compiler = { version = "=0.0.3", path = "crates/verve-compiler" }
+verve-config = { version = "=0.0.3", path = "crates/verve-config" }
+verve-core = { version = "=0.0.3", path = "crates/verve-core" }
+verve-editor = { version = "=0.0.3", path = "crates/verve-editor" }
+verve-kernel = { version = "=0.0.3", path = "crates/verve-kernel" }
+verve-kernel-mihomo = { version = "=0.0.3", path = "crates/verve-kernel-mihomo" }
+verve-protocol = { version = "=0.0.3", path = "crates/verve-protocol" }
+verve-service = { version = "=0.0.3", path = "crates/verve-service" }
+verve-sync = { version = "=0.0.3", path = "crates/verve-sync" }
+verve-sys = { version = "=0.0.3", path = "crates/verve-sys" }
+verve-ui-kit = { version = "=0.0.3", path = "crates/verve-ui-kit" }
 
 # Shared external crates for the workspace stack
 arc-swap = "1.9"
