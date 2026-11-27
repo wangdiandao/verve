@@ -38,11 +38,7 @@ pub(crate) async fn run_preflight(
             }]);
         }
         Err(_) => {
-            return Err(vec![ConfigDiagnostic {
-                line: None,
-                column: None,
-                message: format!("mihomo preflight timed out after {}ms", timeout.as_millis()),
-            }]);
+            return Err(vec![timeout_diagnostic(timeout)]);
         }
     };
 
@@ -54,6 +50,17 @@ pub(crate) async fn run_preflight(
     let stderr = String::from_utf8_lossy(&output.stderr);
     let diagnostics = parse_preflight_diagnostics(&stdout, &stderr, output.status.code());
     Err(diagnostics)
+}
+
+pub(crate) fn timeout_diagnostic(timeout: Duration) -> ConfigDiagnostic {
+    ConfigDiagnostic {
+        line: None,
+        column: None,
+        message: format!(
+            "mihomo preflight timed out after {}ms (first-time GeoIP/GeoSite database or remote provider downloads may have exceeded the timeout)",
+            timeout.as_millis()
+        ),
+    }
 }
 
 pub(crate) fn parse_preflight_diagnostics(
@@ -236,5 +243,14 @@ configuration file C:\temp\broken.yaml test failed"#;
         let diags = parse_preflight_diagnostics("", "", Some(2));
         assert_eq!(diags.len(), 1);
         assert!(diags[0].message.contains("exit code 2"));
+    }
+
+    #[test]
+    fn formats_descriptive_timeout_diagnostic() {
+        let diag = timeout_diagnostic(Duration::from_secs(60));
+        assert_eq!(diag.line, None);
+        assert_eq!(diag.column, None);
+        assert!(diag.message.contains("60000ms"));
+        assert!(diag.message.contains("GeoIP/GeoSite"));
     }
 }
