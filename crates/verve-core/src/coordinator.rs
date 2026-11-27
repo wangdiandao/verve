@@ -22,7 +22,9 @@ use verve_kernel::{
     ControlEndpoint, DaemonIpcSupervisor, DirectProcessSupervisor, KernelError, KernelSupervisor,
     LogLevel, ProxyKernel, ProxyMode, ProxyTopology, RuleSnapshot, ServiceIpcClient,
 };
-use verve_kernel_mihomo::{MihomoKernel, MihomoKernelConfig, discover_mihomo_binary};
+use verve_kernel_mihomo::{
+    DEFAULT_PREFLIGHT_TIMEOUT, MihomoKernel, MihomoKernelConfig, discover_mihomo_binary,
+};
 use verve_sys::{
     AutoLaunchBackend, InMemoryAutoLaunchBackend, InMemorySystemProxyBackend, OsAutoLaunchBackend,
     OsSystemProxyBackend, SysError, SystemProxyBackend, SystemProxyManager, SystemProxySnapshot,
@@ -174,6 +176,7 @@ pub struct MihomoCoordinatorBuilder {
     control_endpoint: Option<ControlEndpoint>,
     secret: Option<String>,
     request_timeout: Duration,
+    preflight_timeout: Duration,
     startup_timeout: Duration,
     script_engine: Arc<dyn ScriptEngine>,
     command_buffer_capacity: usize,
@@ -195,6 +198,7 @@ impl MihomoCoordinatorBuilder {
             control_endpoint: None,
             secret: None,
             request_timeout: DEFAULT_REQUEST_TIMEOUT,
+            preflight_timeout: DEFAULT_PREFLIGHT_TIMEOUT,
             startup_timeout: DEFAULT_STARTUP_TIMEOUT,
             script_engine: Arc::new(NoopScriptEngine),
             command_buffer_capacity: DEFAULT_COMMAND_BUFFER_CAPACITY,
@@ -229,6 +233,12 @@ impl MihomoCoordinatorBuilder {
     /// Sets the per-request IPC timeout used by [`MihomoKernel`].
     pub fn request_timeout(mut self, timeout: Duration) -> Self {
         self.request_timeout = timeout;
+        self
+    }
+
+    /// Sets the timeout for `mihomo -t` configuration preflight validation.
+    pub fn preflight_timeout(mut self, timeout: Duration) -> Self {
+        self.preflight_timeout = timeout;
         self
     }
 
@@ -312,6 +322,7 @@ impl MihomoCoordinatorBuilder {
             endpoint: control_endpoint.clone(),
             secret: self.secret,
             request_timeout: self.request_timeout,
+            preflight_timeout: self.preflight_timeout,
         }));
 
         let compiler = CompilerPipeline::new(self.script_engine);

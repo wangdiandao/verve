@@ -25,6 +25,12 @@ use crate::transport::{
     HttpResponse, IpcStream, encode_segment, open_websocket, send_http_request,
 };
 
+/// Default timeout for `mihomo -t` configuration preflight checks.
+///
+/// Generous enough to accommodate first-time GeoIP/GeoSite database or remote
+/// provider downloads without prematurely killing the validation process.
+pub const DEFAULT_PREFLIGHT_TIMEOUT: Duration = Duration::from_secs(60);
+
 /// Configuration for connecting to and validating a Mihomo proxy kernel instance.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MihomoKernelConfig {
@@ -38,6 +44,8 @@ pub struct MihomoKernelConfig {
     pub secret: Option<String>,
     /// Per-request IPC connect and response timeout.
     pub request_timeout: Duration,
+    /// Timeout for `mihomo -t` configuration preflight validation.
+    pub preflight_timeout: Duration,
 }
 
 /// Mihomo control-plane adapter implementing [`ProxyKernel`].
@@ -224,7 +232,7 @@ impl ProxyKernel for MihomoKernel {
             &self.config.binary_path,
             &self.config.work_dir,
             path,
-            self.config.request_timeout,
+            self.config.preflight_timeout,
         )
         .await
     }

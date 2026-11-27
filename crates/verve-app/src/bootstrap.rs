@@ -14,7 +14,7 @@ use verve_core::config::ConfigManager;
 use verve_core::kernel::{
     ControlEndpoint, DirectProcessSupervisor, KernelSupervisor, ServiceIpcClient,
 };
-use verve_core::kernel_mihomo::{MihomoKernel, MihomoKernelConfig};
+use verve_core::kernel_mihomo::{DEFAULT_PREFLIGHT_TIMEOUT, MihomoKernel, MihomoKernelConfig};
 use verve_core::sys::{
     ActivationListener, OsEvent, OsEventBus, SingleInstanceGuard, create_platform_tray,
     default_activation_endpoint, notify_primary_instance,
@@ -104,6 +104,7 @@ fn spawn_backend(data_dir: &PathBuf) -> Result<BootBackend, CoreError> {
                 endpoint: endpoint.clone(),
                 secret: None,
                 request_timeout: std::time::Duration::from_secs(5),
+                preflight_timeout: DEFAULT_PREFLIGHT_TIMEOUT,
             }));
             let mut handle = AppCoordinator::spawn(
                 config_manager,

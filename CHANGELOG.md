@@ -4,6 +4,10 @@ See [versioning and releases](docs/release.md) for the version progression polic
 
 ## Unreleased
 
+### Core & Kernel
+
+- Decoupled `mihomo -t` configuration preflight timeout (`DEFAULT_PREFLIGHT_TIMEOUT`, 60s) from the 5s IPC `request_timeout` in `MihomoKernelConfig` and `MihomoCoordinatorBuilder`, and clarified timeout diagnostics so first-time GeoIP/GeoSite database or remote provider downloads do not prematurely fail profile activation.
+
 ### UI & UX
 
 - Removed explanatory card subtitles, switch/input supporting helper subtexts, empty-state explanatory descriptions, and the static service privilege guidance banner across all desktop views (`Overview`, `Proxies`, `Profiles`, `Activity`, `Settings`) while keeping live status telemetry, validation errors, and destructive confirmation prompts.

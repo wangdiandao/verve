@@ -23,7 +23,9 @@ use verve_kernel::{
     ControlEndpoint, DirectProcessSupervisor, LogLevel, ProviderKind, ProxyGroupKind, ProxyKernel,
     ProxyMode, TelemetryEvent, TelemetryKind,
 };
-use verve_kernel_mihomo::{MihomoKernel, MihomoKernelConfig, discover_mihomo_binary};
+use verve_kernel_mihomo::{
+    DEFAULT_PREFLIGHT_TIMEOUT, MihomoKernel, MihomoKernelConfig, discover_mihomo_binary,
+};
 
 static TEST_SEQ: AtomicU64 = AtomicU64::new(0);
 
@@ -511,6 +513,7 @@ async fn mock_ipc_rest_control_plane_round_trip() {
         endpoint,
         secret: Some("test-secret".into()),
         request_timeout: Duration::from_secs(3),
+        preflight_timeout: DEFAULT_PREFLIGHT_TIMEOUT,
     });
 
     let caps = kernel.capabilities();
@@ -625,6 +628,7 @@ async fn mock_ipc_telemetry_websocket_streams_events() {
         endpoint,
         secret: Some("ws-secret".into()),
         request_timeout: Duration::from_secs(3),
+        preflight_timeout: DEFAULT_PREFLIGHT_TIMEOUT,
     });
 
     // Traffic WebSocket frames
@@ -765,6 +769,7 @@ rules:
         endpoint: endpoint.clone(),
         secret: Some("verve-it-secret".into()),
         request_timeout: Duration::from_secs(5),
+        preflight_timeout: DEFAULT_PREFLIGHT_TIMEOUT,
     });
 
     // 1. Preflight passes on valid config and emits structured diagnostics on broken config.

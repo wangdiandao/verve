@@ -77,6 +77,15 @@ async fn mihomo_headless_e2e_import_compile_start_select_persist_and_telemetry()
         .spawn()
         .expect("spawn Mihomo coordinator");
 
+    assert_eq!(
+        handle.kernel().config().request_timeout,
+        Duration::from_secs(5)
+    );
+    assert_eq!(
+        handle.kernel().config().preflight_timeout,
+        verve_core::kernel_mihomo::DEFAULT_PREFLIGHT_TIMEOUT
+    );
+
     let raw_subscription_yaml = r#"
 proxies:
   - name: hk-01
